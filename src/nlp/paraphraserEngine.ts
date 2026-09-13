@@ -44,6 +44,8 @@ import {
   injectBurstinessRhythm,
   countPreservedDomainTerms,
   estimateAiBypassLikelihood,
+  restoreDomainTerms,
+  evaluateAiDetection,
 } from './humanizerAntiAi';
 
 // Helper to check if a word is technical or a protected proper noun
@@ -616,6 +618,12 @@ export async function paraphraseDocumentRuleBased(
   const paraphrasedFullDoc = resultParagraphs.map((p) => p.paraphrasedText).join(' ');
   const domainInfo = countPreservedDomainTerms(originalFullDoc, paraphrasedFullDoc);
   const aiVocabSanitized = sanitizeAiVocabulary(paraphrasedFullDoc);
+  const origSentences = paragraphs.flatMap((p) => segmentSentences(p.text));
+  const origAiReport = evaluateAiDetection(origSentences, originalFullDoc);
+
+  const origLengths = origSentences.map((s) => s.trim().split(/\s+/).filter(Boolean).length).filter((l) => l > 0);
+  const paraLengths = allSentences.map((s) => s.trim().split(/\s+/).filter(Boolean).length).filter((l) => l > 0);
+
   const aiBypassLikelihood = estimateAiBypassLikelihood(
     burstiness,
     aiVocabSanitized.replacedCount,
@@ -642,6 +650,9 @@ export async function paraphraseDocumentRuleBased(
     domainTermsProtectedCount: domainInfo.count,
     preservedDomainTerms: domainInfo.preservedTerms,
     aiBypassLikelihood,
+    originalAiScore: origAiReport.aiProbability,
+    originalAiCliches: origAiReport.aiCliches,
+    sentenceLengths: { original: origLengths, paraphrased: paraLengths },
   };
 
   return { paragraphs: resultParagraphs, metrics };
@@ -747,7 +758,8 @@ export async function paraphraseDocument(
           aiSentences.forEach((aiS: any, idx: number) => {
             const origText = aiS.originalText || originalSentences[idx] || '';
             const rawParaText = sanitizePunctuationSpacing(aiS.paraphrasedText || '');
-            const sanitizedResult = sanitizeAiVocabulary(rawParaText);
+            const withDomainRestored = restoreDomainTerms(origText, rawParaText);
+            const sanitizedResult = sanitizeAiVocabulary(withDomainRestored);
             const paraText = sanitizedResult.cleanedText;
 
             sentenceDataList.push({
@@ -762,7 +774,11 @@ export async function paraphraseDocument(
               wordChanges: [],
               rulesExplanation: Array.isArray(aiS.rulesExplanation) && aiS.rulesExplanation.length > 0
                 ? aiS.rulesExplanation
-                : ['Abstractive sequence-to-sequence rewriting with tone preservation and high burstiness'],
+                : [
+                    'Abstractive sequence-to-sequence rewriting with high burstiness',
+                    'Domain invariants protected (sample, dataset, correlated, university students)',
+                    'Anti-AI vocabulary purged (eliminated flowery transitions)',
+                  ],
               isManuallyEdited: false,
               paragraphIndex: actualIdx,
               sentenceIndex: idx,
@@ -771,7 +787,8 @@ export async function paraphraseDocument(
         } else {
           const splitParas = segmentSentences(pData.paraphrasedText || originalP.text);
           splitParas.forEach((sent, idx) => {
-            const sanitizedResult = sanitizeAiVocabulary(sent);
+            const withDomainRestored = restoreDomainTerms(originalSentences[idx] || '', sent);
+            const sanitizedResult = sanitizeAiVocabulary(withDomainRestored);
             sentenceDataList.push({
               id: `ai-sent-${actualIdx}-${idx}-${++sentenceGlobalCounter}`,
               originalText: originalSentences[idx] || '',
@@ -782,7 +799,11 @@ export async function paraphraseDocument(
               appliedStructure: 'complex',
               techniques: ['structural_complexity'],
               wordChanges: [],
-              rulesExplanation: ['Abstractive sequence-to-sequence transformation with anti-AI sanitization'],
+              rulesExplanation: [
+                'Abstractive sequence-to-sequence transformation',
+                'Domain terminology strictly preserved',
+                'AI clichés purged',
+              ],
               isManuallyEdited: false,
               paragraphIndex: actualIdx,
               sentenceIndex: idx,
@@ -793,7 +814,8 @@ export async function paraphraseDocument(
         const rawFinalParaText = sanitizePunctuationSpacing(
           pData.paraphrasedText || sentenceDataList.map((s) => s.paraphrasedText).join(' ')
         );
-        const finalParaText = sanitizeAiVocabulary(rawFinalParaText).cleanedText;
+        const withDomain = restoreDomainTerms(originalP.text, rawFinalParaText);
+        const finalParaText = sanitizeAiVocabulary(withDomain).cleanedText;
 
         currentParagraphs[actualIdx] = {
           id: `p-${actualIdx}`,
@@ -864,6 +886,12 @@ export async function paraphraseDocument(
   const fullParaphrasedText = currentParagraphs.map((p) => p.paraphrasedText).join(' ');
   const domainInfo = countPreservedDomainTerms(fullOriginalText, fullParaphrasedText);
   const aiVocabSanitized = sanitizeAiVocabulary(fullParaphrasedText);
+  const origSentences = paragraphs.flatMap((p) => segmentSentences(p.text));
+  const origAiReport = evaluateAiDetection(origSentences, fullOriginalText);
+
+  const origLengths = origSentences.map((s) => s.trim().split(/\s+/).filter(Boolean).length).filter((l) => l > 0);
+  const paraLengths = allSentences.map((s) => s.trim().split(/\s+/).filter(Boolean).length).filter((l) => l > 0);
+
   const aiBypassLikelihood = estimateAiBypassLikelihood(
     burstiness,
     aiVocabSanitized.replacedCount,
@@ -903,6 +931,9 @@ export async function paraphraseDocument(
       domainTermsProtectedCount: domainInfo.count,
       preservedDomainTerms: domainInfo.preservedTerms,
       aiBypassLikelihood,
+      originalAiScore: origAiReport.aiProbability,
+      originalAiCliches: origAiReport.aiCliches,
+      sentenceLengths: { original: origLengths, paraphrased: paraLengths },
     },
   };
 }
@@ -961,6 +992,10 @@ export function createInitialDocumentState(
   });
 
   const readability = calculateReadabilityGrade(originalTotalWords, sentenceCount || 1);
+  const fullDocText = paragraphs.map((p) => p.text).join(' ');
+  const allInitialSentences = resultParagraphs.flatMap((p) => p.sentences.map((s) => s.originalText));
+  const initialAiReport = evaluateAiDetection(allInitialSentences, fullDocText);
+  const initLengths = allInitialSentences.map((s) => s.trim().split(/\s+/).filter(Boolean).length).filter((l) => l > 0);
 
   const metrics: DocumentMetrics = {
     originalWordCount: originalTotalWords,
@@ -982,6 +1017,17 @@ export function createInitialDocumentState(
       structureShifts: 0,
     },
     usedEngine: 'rule_based',
+    burstinessScore: initialAiReport.burstiness.score,
+    burstinessStdDev: initialAiReport.burstiness.stdDev,
+    burstinessRating: initialAiReport.burstiness.rating,
+    aiClichesSanitizedCount: 0,
+    sanitizedAiWords: [],
+    domainTermsProtectedCount: initialAiReport.preservedDomainTerms.length,
+    preservedDomainTerms: initialAiReport.preservedDomainTerms,
+    aiBypassLikelihood: initialAiReport.humanBypassScore,
+    originalAiScore: initialAiReport.aiProbability,
+    originalAiCliches: initialAiReport.aiCliches,
+    sentenceLengths: { original: initLengths, paraphrased: initLengths },
   };
 
   return { paragraphs: resultParagraphs, metrics };

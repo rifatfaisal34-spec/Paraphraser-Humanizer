@@ -26,7 +26,7 @@ export const AI_VOCABULARY_MAP: Record<string, { replacements: string[]; pattern
     pattern: /\bdelve\s+deeper\s+into\b/gi,
   },
   'delve': {
-    replacements: ['examine', 'investigate', 'explore'],
+    replacements: ['examine', 'investigate', 'explore', 'study'],
     pattern: /\bdelve\b/gi,
   },
   'testament to': {
@@ -36,6 +36,10 @@ export const AI_VOCABULARY_MAP: Record<string, { replacements: string[]; pattern
   'testament': {
     replacements: ['evidence', 'proof', 'sign', 'indication'],
     pattern: /\btestament\b/gi,
+  },
+  'pivotal role': {
+    replacements: ['key role', 'central role', 'major role', 'main role'],
+    pattern: /\b(?:a\s+)?pivotal\s+role\b/gi,
   },
   'pivotal': {
     replacements: ['key', 'central', 'critical', 'important', 'major'],
@@ -180,6 +184,26 @@ export const AI_VOCABULARY_MAP: Record<string, { replacements: string[]; pattern
   'commendable': {
     replacements: ['effective', 'noteworthy', 'solid', 'strong'],
     pattern: /\bcommendable\b/gi,
+  },
+  'in conclusion': {
+    replacements: ['overall,', 'in summary,', 'ultimately,'],
+    pattern: /\bin\s+conclusion,?\b/gi,
+  },
+  'spearhead': {
+    replacements: ['lead', 'direct', 'guide', 'initiate'],
+    pattern: /\bspearhead(?:s|ed|ing)?\b/gi,
+  },
+  'holistic approach': {
+    replacements: ['comprehensive approach', 'broad method', 'integrated method'],
+    pattern: /\b(?:a\s+)?holistic\s+approach\b/gi,
+  },
+  'myriad of': {
+    replacements: ['many', 'numerous', 'various', 'wide range of'],
+    pattern: /\b(?:a\s+)?myriad\s+of\b/gi,
+  },
+  'plethora of': {
+    replacements: ['abundance of', 'large number of', 'many'],
+    pattern: /\b(?:a\s+)?plethora\s+of\b/gi,
   },
 };
 
@@ -458,6 +482,99 @@ export function countPreservedDomainTerms(originalText: string, paraphrasedText:
 }
 
 /**
+ * Restores domain and methodological terms if an abstractive model replaced them
+ * with unnatural or awkward pseudo-synonyms (e.g. "specimen" for "sample", "tertiary learners" for "university students").
+ */
+export function restoreDomainTerms(originalText: string, paraphrasedText: string): string {
+  let restored = paraphrasedText;
+  const origLower = originalText.toLowerCase();
+
+  // 1. "sample" / "samples"
+  if (/\bsamples?\b/i.test(origLower)) {
+    restored = restored.replace(/\b(?:specimens?|test\s+subjects?|experimental\s+cohorts?)\b/gi, (match) => {
+      return match.toLowerCase().endsWith('s') ? 'samples' : 'sample';
+    });
+  }
+
+  // 2. "dataset" / "datasets" / "data set"
+  if (/\bdata\s*sets?\b/i.test(origLower)) {
+    restored = restored.replace(/\b(?:data\s+corpus|information\s+repository|collection\s+of\s+records)\b/gi, 'dataset');
+  }
+
+  // 3. "university students" / "college students"
+  if (/\b(?:university|college|undergraduate)\s+students\b/i.test(origLower)) {
+    restored = restored.replace(/\b(?:tertiary\s+learners|higher\s+education\s+pupils|academic\s+scholars|collegiate\s+attendees)\b/gi, 'university students');
+  }
+
+  // 4. "correlated" / "correlation"
+  if (/\bcorrelat(?:ed|ion|es)\b/i.test(origLower)) {
+    restored = restored.replace(/\b(?:interlinked\s+with|co-manifested\s+with|intertwined\s+with)\b/gi, 'correlated with');
+  }
+
+  return restored;
+}
+
+export interface AiDetectionReport {
+  aiProbability: number; // 0 - 100% likelihood of AI detector flagging
+  humanBypassScore: number; // 0 - 100% likelihood of passing as authentic human
+  burstiness: BurstinessResult;
+  aiCliches: string[];
+  preservedDomainTerms: string[];
+}
+
+/**
+ * Evaluates a block of text against typical AI detection heuristics:
+ * Perplexity/burstiness variance, clichéd transitions, and domain phrasing integrity.
+ */
+export function evaluateAiDetection(sentences: string[], fullText: string): AiDetectionReport {
+  const burstiness = calculateBurstiness(sentences);
+
+  const foundCliches: string[] = [];
+  for (const [key, config] of Object.entries(AI_VOCABULARY_MAP)) {
+    if (config.pattern.test(fullText)) {
+      foundCliches.push(key);
+    }
+  }
+
+  const domain = countPreservedDomainTerms(fullText, fullText);
+
+  // Baseline AI flag probability
+  let aiProb = 15;
+
+  // AI models have low sentence length variance (std dev < 4.5)
+  if (burstiness.stdDev < 3.5 || burstiness.uniformRunDetected) {
+    aiProb += 45;
+  } else if (burstiness.stdDev < 5.2) {
+    aiProb += 25;
+  } else if (burstiness.stdDev >= 6.8) {
+    aiProb -= 10;
+  }
+
+  // AI clichés heavily trigger GPTZero / Turnitin
+  if (foundCliches.length > 0) {
+    aiProb += Math.min(45, foundCliches.length * 15);
+  } else {
+    aiProb -= 5;
+  }
+
+  // If domain terms are natural
+  if (domain.count > 0) {
+    aiProb -= Math.min(10, domain.count * 2);
+  }
+
+  const finalAiProb = Math.min(99, Math.max(3, Math.round(aiProb)));
+  const humanBypass = 100 - finalAiProb;
+
+  return {
+    aiProbability: finalAiProb,
+    humanBypassScore: humanBypass,
+    burstiness,
+    aiCliches: foundCliches,
+    preservedDomainTerms: domain.preservedTerms,
+  };
+}
+
+/**
  * Computes estimated AI Detection Bypass Likelihood (0 - 100%)
  * based on Burstiness, AI Vocabulary absence, and Domain Term consistency.
  */
@@ -479,13 +596,14 @@ export function estimateAiBypassLikelihood(
   if (aiClichesFound === 0) {
     likelihood += 4;
   } else {
-    likelihood -= Math.min(20, aiClichesFound * 4);
+    likelihood -= Math.min(25, aiClichesFound * 5);
   }
 
   // Preserving authentic domain terms keeps perplexity realistic
   if (preservedDomainCount > 0) {
-    likelihood += Math.min(5, preservedDomainCount * 1.5);
+    likelihood += Math.min(6, preservedDomainCount * 1.5);
   }
 
-  return Math.min(99, Math.max(35, Math.round(likelihood)));
+  return Math.min(99, Math.max(25, Math.round(likelihood)));
 }
+

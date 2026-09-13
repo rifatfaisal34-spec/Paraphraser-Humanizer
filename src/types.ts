@@ -93,7 +93,10 @@ export interface DocumentMetrics {
   sanitizedAiWords?: string[];
   domainTermsProtectedCount?: number;
   preservedDomainTerms?: string[];
-  aiBypassLikelihood?: number; // 0 - 100 %
+  aiBypassLikelihood?: number; // 0 - 100 % (Human Authenticity / Bypass score)
+  originalAiScore?: number; // 0 - 100 % (Original AI detection probability)
+  originalAiCliches?: string[];
+  sentenceLengths?: { original: number[]; paraphrased: number[] };
 }
 
 export interface ParaphraseProgress {

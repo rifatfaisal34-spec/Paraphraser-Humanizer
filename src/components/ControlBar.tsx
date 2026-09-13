@@ -143,8 +143,8 @@ export const ControlBar: React.FC<ControlBarProps> = ({
             </div>
           </div>
 
-          {/* Protect Technical Vocabulary & Proper Nouns */}
-          <label className="inline-flex items-center cursor-pointer select-none space-x-2 text-xs text-emerald-300 bg-emerald-950/40 border border-emerald-500/30 px-2.5 py-1.5 rounded-lg hover:bg-emerald-950/60 transition-colors">
+          {/* Safeguard Domain Terms & Citations */}
+          <label className="inline-flex items-center cursor-pointer select-none space-x-1.5 text-xs text-emerald-300 bg-emerald-950/40 border border-emerald-500/30 px-2.5 py-1.5 rounded-lg hover:bg-emerald-950/60 transition-colors" title="Guarantees scientific terms like sample, dataset, correlated, and citations are preserved">
             <Shield className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
             <input
               id="cb-protect-tech"
@@ -153,7 +153,33 @@ export const ControlBar: React.FC<ControlBarProps> = ({
               onChange={(e) => update('preserveTechnicalTerms', e.target.checked)}
               className="rounded border-slate-700 bg-slate-800 text-emerald-500 focus:ring-0 focus:ring-offset-0"
             />
-            <span className="font-medium">Safeguard Jargon & Citations</span>
+            <span className="font-medium">Domain Invariants</span>
+          </label>
+
+          {/* High Burstiness Toggle */}
+          <label className="inline-flex items-center cursor-pointer select-none space-x-1.5 text-xs text-amber-300 bg-amber-950/40 border border-amber-500/30 px-2.5 py-1.5 rounded-lg hover:bg-amber-950/60 transition-colors" title="Enforces high burstiness by alternating punchy short sentences with complex compound structures">
+            <Zap className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+            <input
+              id="cb-burstiness"
+              type="checkbox"
+              checked={config.enforceBurstiness ?? true}
+              onChange={(e) => update('enforceBurstiness', e.target.checked)}
+              className="rounded border-slate-700 bg-slate-800 text-amber-500 focus:ring-0 focus:ring-offset-0"
+            />
+            <span className="font-medium">High Burstiness</span>
+          </label>
+
+          {/* Purge AI Vocabulary */}
+          <label className="inline-flex items-center cursor-pointer select-none space-x-1.5 text-xs text-purple-300 bg-purple-950/40 border border-purple-500/30 px-2.5 py-1.5 rounded-lg hover:bg-purple-950/60 transition-colors" title="Strips overused AI buzzwords (furthermore, pivotal, delve, crucial, testament)">
+            <Sparkles className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+            <input
+              id="cb-strip-cliches"
+              type="checkbox"
+              checked={config.stripAiVocabulary ?? true}
+              onChange={(e) => update('stripAiVocabulary', e.target.checked)}
+              className="rounded border-slate-700 bg-slate-800 text-purple-500 focus:ring-0 focus:ring-offset-0"
+            />
+            <span className="font-medium">Purge AI Clichés</span>
           </label>
         </div>
 

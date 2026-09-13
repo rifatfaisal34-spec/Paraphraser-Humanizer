@@ -174,25 +174,24 @@ export async function createSampleDocx(sampleType: 'academic' | 'business' | 'ca
   let fileName = '';
 
   if (sampleType === 'academic') {
-    fileName = 'Academic_Research_Abstract.docx';
-    title = 'Empirical Investigation of Quantum Computing Algorithms';
+    fileName = 'AI_Draft_Social_Media_Research.docx';
+    title = 'Impact of Social Media Usage on Well-Being in University Students';
     contentParagraphs = [
-      'The experimental procedure was conducted by our research team to evaluate algorithm efficiency. Because the existing methodology had severe computational limitations, an optimized quantum framework was developed by the engineers. The data was analyzed by the scientists, and results show that processing speed is significant and reliable. We conducted an examination of the latency variance, which revealed that error rates were not high.',
-      'In order to validate our theoretical hypothesis, multiple benchmark simulations were executed. The findings demonstrate that quantum entanglement is useful for high-throughput cryptography. We made a decision to analyze subsequent iterations, although further longitudinal data is necessary to reach definitive conclusions.',
+      'In this empirical investigation, a representative sample of 380 university students completed a structured survey measure. The dataset was analyzed using multiple regression models to examine psychological outcomes. The primary results demonstrate that frequent social media use was significantly correlated with reduced self-esteem (r = -0.34, p < .01). Furthermore, it is crucial to delve into how peer comparison plays a pivotal role in shaping daily affective experiences.',
+      'The statistical models meticulously controlled for baseline demographic indicators and academic load across participants. In addition, these quantitative findings stand as a testament to the importance of fostering mindful digital consumption. It is worth noting that future longitudinal research should continue to explore how specific algorithmic feeds influence cognitive fatigue over time.',
     ];
   } else if (sampleType === 'business') {
-    fileName = 'Executive_Business_Proposal.docx';
+    fileName = 'AI_Draft_Executive_Proposal.docx';
     title = 'Strategic Proposal for Enterprise Workflow Modernization';
     contentParagraphs = [
-      'A comprehensive audit was performed by the consulting team to identify operational bottlenecks. Because legacy infrastructure imposes high maintenance expenses, a cloud-native architecture was designed by the engineering leads. We must improve our internal communication channels to ensure that project milestones are met on schedule.',
-      'The strategic rollout plan was prepared by the operations department. We decided to conduct an analysis of quarterly cost reductions, which clearly shows that the proposed automation is good and effective for team productivity.',
+      'A comprehensive audit was performed across legacy enterprise applications to identify persistent operational bottlenecks. Furthermore, it is crucial to navigate the dynamic landscape of cloud infrastructure to maintain a competitive market posture. The engineering leadership team meticulously reviewed the initial metrics, which underscored the paramount importance of automation.',
+      'In addition, this strategic overhaul stands as a testament to fostering cross-functional efficiency across distributed teams. We must leverage modern integration patterns to spearhead innovation and streamline delivery pipelines.',
     ];
   } else {
-    fileName = 'Casual_Team_Update.docx';
-    title = 'Weekly Sprint Sync and Notes';
+    fileName = 'AI_Draft_Team_Announcement.docx';
+    title = 'Weekly Product Sprint and Architecture Sync';
     contentParagraphs = [
-      'The new user interface was built by the frontend team yesterday. Because we wanted to help new users get started easily, simple tutorial steps were added by our designers. The app runs fast and it is not difficult to navigate.',
-      'We had a quick chat to explain the latest features, and everyone thinks the project is in a good place. We will test out the new mobile view tomorrow before we finish the release.',
+      'Our development squad completed the core platform redesign during the previous weekly sprint cycle. Furthermore, it is crucial to delve into the user feedback metrics to verify that navigation remains seamless. We are embarking on a fresh series of usability tests to ensure high performance before the upcoming production rollout.',
     ];
   }
 
