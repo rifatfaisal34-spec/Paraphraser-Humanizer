@@ -127,16 +127,23 @@ export function generateDeterministicRulePlan(
   const plannedRules: TechniqueUsed[] = [];
   const voice = detectVoice(coreText);
 
-  // 1. Voice Directive: Respect active/passive balance
+  // 1. Voice Directive: Convert passive to active (§11 Anti-AI Rule) or introduce variance
   let voiceDirective: 'active' | 'passive' | 'keep' = 'keep';
+  if (voice.voice === 'passive') {
+    voiceDirective = 'active';
+    plannedRules.push('voice_active');
+  } else if (intensity === 'radical' && voice.voice === 'active' && wordCount >= 10 && sentenceIndex % 3 === 2) {
+    voiceDirective = 'passive';
+    plannedRules.push('voice_passive');
+  }
 
   // 2. Clause Reordering: Safe fronting or inversion of subordinate clauses
   // Breaks identical sentence length and word order footprints safely without corrupting syntax
   let reorderClause = false;
   if (!coreText.includes(':') && !coreText.includes(';')) {
-    const hasSafeSubConj = /\b(because|although|even though|while|whereas|since|inasmuch as|given that)\b/i.test(coreText);
+    const hasSafeSubConj = /\b(because|although|even though|while|whereas|since|inasmuch as|given that|when|after|before|unless|as long as|provided that)\b/i.test(coreText);
     if (hasSafeSubConj && !/\bbecause\s+of\b/i.test(coreText)) {
-      const minWordCount = intensity === 'radical' ? 7 : 8;
+      const minWordCount = intensity === 'radical' ? 6 : 8;
       reorderClause = wordCount >= minWordCount;
       if (reorderClause) {
         plannedRules.push('clause_reorder');

@@ -331,7 +331,7 @@ export async function paraphraseDocumentRuleBased(
     }
 
     const sentencesRaw = segmentSentences(p.text);
-    const sentenceDataList: SentenceData[] = [];
+    let sentenceDataList: SentenceData[] = [];
     let sentenceCounterInPara = 0;
 
     // Step A: Automatically split dense/compound sentences where possible (ONLY for proper sentences without colon prefixes)
@@ -846,11 +846,15 @@ export async function paraphraseDocument(
               // 1. Restore invariant domain terms, statistical notations, sample sizes, and citations
               candidate = restoreDomainTerms(origText, candidate);
 
-              // 2. Anti-AI Detection: Purge any accidental AI cliches
+              // 2. Anti-AI Humanizer Pass (25 Wikipedia rules)
+              const humanizedSent = applyLinguisticHumanizationRules(candidate, config.tone);
+              candidate = humanizedSent.transformedText;
+
+              // 3. Purge any surviving AI cliches
               const sanitizedVocab = sanitizeAiVocabulary(candidate);
               candidate = sanitizedVocab.cleanedText;
 
-              // 3. Normalize spacing and punctuation
+              // 4. Normalize spacing and punctuation
               candidate = sanitizePunctuationSpacing(candidate);
 
               // 4. Ensure any structural prefix (e.g. "Note: ", "Figure 1: ") is maintained
@@ -986,6 +990,7 @@ export async function paraphraseDocument(
             if (pData.paraphrasedText && pData.paraphrasedText !== originalP.text) {
               let candidate = sent.trim();
               candidate = restoreDomainTerms(origText, candidate);
+              candidate = applyLinguisticHumanizationRules(candidate, config.tone).transformedText;
               candidate = sanitizeAiVocabulary(candidate).cleanedText;
               candidate = sanitizePunctuationSpacing(candidate);
 

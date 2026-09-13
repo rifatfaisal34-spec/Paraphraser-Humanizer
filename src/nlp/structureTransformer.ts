@@ -63,7 +63,7 @@ export function reorderClauses(sentence: string): TransformResult {
   }
 
   // Pattern A: Subordinating conjunction at start: "[SubConj] [ClauseA], [ClauseB]"
-  for (const conj of ['Because', 'Although', 'Even though', 'While', 'Whereas', 'Since', 'Given that', 'Inasmuch as', 'If']) {
+  for (const conj of ['Because', 'Although', 'Even though', 'While', 'Whereas', 'Since', 'Given that', 'Inasmuch as', 'If', 'When', 'After', 'Before', 'Unless', 'As long as', 'Provided that']) {
     const startRegex = new RegExp(`^${conj}\\s+([^,]+),\\s*(.+)$`, 'i');
     const match = clean.match(startRegex);
     if (match) {
@@ -96,7 +96,7 @@ export function reorderClauses(sentence: string): TransformResult {
   }
 
   // Pattern B: Subordinating conjunction in middle: "[ClauseB] [conj] [ClauseA]"
-  for (const conj of ['because', 'although', 'even though', 'while', 'whereas', 'since', 'given that', 'if']) {
+  for (const conj of ['because', 'although', 'even though', 'while', 'whereas', 'since', 'given that', 'if', 'when', 'after', 'before', 'unless', 'as long as', 'provided that']) {
     const middleRegex = new RegExp(`^(.+?)\\s*,?\\s+\\b${conj}\\b\\s+(.+)$`, 'i');
     const midMatch = clean.match(middleRegex);
     if (midMatch) {

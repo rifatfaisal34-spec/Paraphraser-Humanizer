@@ -614,6 +614,19 @@ export function rule6_smoothForcedTriads(text: string): { text: string; applied:
     }
   }
 
+  // Generalized triad: break forced lists of 3 into 2 strong points ("w1 and w3")
+  // Guard against academic citations like "(Smith, Jones, and Brown, 2021)"
+  const triadRegex = /\b([A-Za-z]{3,}),\s+([A-Za-z]{3,}),\s+and\s+([A-Za-z]{3,})\b/g;
+  modified = modified.replace(triadRegex, (match, w1, w2, w3, offset, fullStr) => {
+    const beforeStr = fullStr.slice(0, offset);
+    const openP = (beforeStr.match(/\(/g) || []).length;
+    const closeP = (beforeStr.match(/\)/g) || []).length;
+    if (openP > closeP) return match; // Inside citation or parentheses
+
+    applied = true;
+    return `${w1} and ${w3}`;
+  });
+
   return { text: modified, applied };
 }
 
@@ -763,6 +776,66 @@ export function rule11_resolvePassiveMissingSubjects(text: string): { text: stri
 }
 
 /**
+ * §12: Replace overused AI words.
+ * Replaces words language models use far more often than humans do:
+ * actually, additionally, align with, bolstered, crucial, deep dive, delve,
+ * emphasizing, enduring, enhance, fostering, garner, gate/gated/gating, highlight (verb),
+ * interplay, intricate/intricacies, key (adjective), landscape (abstract noun),
+ * meticulous/meticulously, pivotal, quietly, robust (figurative), showcase,
+ * tapestry (abstract noun), testament, underscore (verb), valuable, vibrant.
+ */
+export function rule12_replaceOverusedAiWords(text: string): { text: string; applied: boolean } {
+  const { cleanedText, replacedCount } = sanitizeAiVocabulary(text);
+  return { text: cleanedText, applied: replacedCount > 0 };
+}
+
+/**
+ * §13: Inflated significance.
+ * Removes inflated importance claims: "stands as a testament", "marking a pivotal moment",
+ * "plays a key role", "marking or shaping the", "underscores its importance", "reflects a broader",
+ * "enduring legacy", "setting the stage for", "evolving landscape", "indelible mark",
+ * "continues to thrive", "the future looks bright", "a step in the right direction".
+ * Keeps the concrete facts and drops the unneeded significance wrapper.
+ */
+export function rule13_stripInflatedSignificance(text: string): { text: string; applied: boolean } {
+  let modified = text;
+  let applied = false;
+
+  const inflatedPatterns: { pattern: RegExp; rep: string }[] = [
+    { pattern: /,\s*marking\s+a\s+pivotal\s+moment\s+(?:in\s+the\s+evolution\s+of\s+)?([^.]+)/gi, rep: '' },
+    { pattern: /\bmarking\s+a\s+pivotal\s+moment\s+(?:in\s+the\s+evolution\s+of\s+)?([^.]+)/gi, rep: 'shaping $1' },
+    { pattern: /\bstands?\s+as\s+a\s+testament\s+to\s+the\s+importance\s+of\s+/gi, rep: 'demonstrates ' },
+    { pattern: /\bstands?\s+as\s+a\s+testament\s+to\s+/gi, rep: 'shows ' },
+    { pattern: /\bplays?\s+a\s+pivotal\s+role\s+in\s+shaping\b/gi, rep: 'influences' },
+    { pattern: /\bplays?\s+a\s+(?:pivotal|crucial|vital|key)\s+role\s+in\b/gi, rep: 'affects' },
+    { pattern: /\bunderscores?\s+(?:the\s+paramount\s+importance\s+of|its\s+importance)\b/gi, rep: 'is important' },
+    { pattern: /\bleft\s+an?\s+indelible\s+mark\s+on\b/gi, rep: 'influenced' },
+    { pattern: /\bsetting\s+the\s+stage\s+for\b/gi, rep: 'leading to' },
+    { pattern: /\bsets\s+the\s+stage\s+for\b/gi, rep: 'leads to' },
+    { pattern: /\ban?\s+enduring\s+legacy\b/gi, rep: 'lasting influence' },
+    { pattern: /\breflects\s+a\s+broader\s+trend\b/gi, rep: 'follows general patterns' },
+    { pattern: /\bthe\s+future\s+looks\s+bright\b/gi, rep: 'growth continues' },
+    { pattern: /\bexciting\s+times\s+ahead\b/gi, rep: 'further developments follow' },
+    { pattern: /\ba\s+step\s+in\s+the\s+right\s+direction\b/gi, rep: 'progress' },
+    { pattern: /\bcontinues?\s+to\s+thrive\b/gi, rep: 'remains active' },
+    { pattern: /\bevolving\s+landscape\s+of\b/gi, rep: 'changes in' },
+    { pattern: /\bdynamic\s+landscape\s+of\b/gi, rep: 'environment of' },
+  ];
+
+  for (const item of inflatedPatterns) {
+    if (item.pattern.test(modified)) {
+      modified = modified.replace(item.pattern, item.rep);
+      applied = true;
+    }
+  }
+
+  // Clean trailing commas left by deletions
+  modified = modified.replace(/,\s*\./g, '.').replace(/\s{2,}/g, ' ');
+
+  return { text: modified, applied };
+}
+
+/**
  * §14: Vague connection or association.
  * States the exact relationship.
  */
@@ -774,11 +847,43 @@ export function rule14_clarifyVagueConnections(text: string): { text: string; ap
   const vague = [
     { pattern: /\bin\s+association\s+with\b/gi, rep: 'alongside' },
     { pattern: /\bin\s+connection\s+with\b/gi, rep: 'related to' },
+    { pattern: /\bclosely\s+tied\s+to\b/gi, rep: 'driven by' },
   ];
 
   for (const v of vague) {
     if (v.pattern.test(modified)) {
       modified = modified.replace(v.pattern, v.rep);
+      applied = true;
+    }
+  }
+
+  return { text: modified, applied };
+}
+
+/**
+ * §16: Sales language.
+ * Purges marketing puffery and promotional claims.
+ */
+export function rule16_purgeSalesLanguage(text: string): { text: string; applied: boolean } {
+  let modified = text;
+  let applied = false;
+
+  const salesPatterns = [
+    { pattern: /\b(?:proudly\s+)?boasts?\s+(?:an?\s+)?/gi, rep: 'has ' },
+    { pattern: /\bgroundbreaking\s+innovation\b/gi, rep: 'advancement' },
+    { pattern: /\bgroundbreaking\b/gi, rep: 'notable' },
+    { pattern: /\bbreathtaking\b/gi, rep: 'impressive' },
+    { pattern: /\bstunning\b/gi, rep: 'notable' },
+    { pattern: /\bnestled\s+in\s+the\s+heart\s+of\b/gi, rep: 'located in' },
+    { pattern: /\ba\s+must-visit\s+destination\b/gi, rep: 'a frequent destination' },
+    { pattern: /\ba\s+diverse\s+array\s+of\b/gi, rep: 'various' },
+    { pattern: /\ba\s+plethora\s+of\b/gi, rep: 'many' },
+    { pattern: /\ba\s+myriad\s+of\b/gi, rep: 'numerous' },
+  ];
+
+  for (const sp of salesPatterns) {
+    if (sp.pattern.test(modified)) {
+      modified = modified.replace(sp.pattern, sp.rep);
       applied = true;
     }
   }
@@ -945,15 +1050,15 @@ export function rule23_removeKnowledgeDisclaimers(text: string): { text: string;
   let applied = false;
 
   const disclaimers = [
-    /(?:^|[.!?]\s+)(?:as\s+of\s+(?:my\s+last\s+update|2023|2024|2025|2026),?\s*|up\s+to\s+my\s+last\s+training\s+update,?\s*)/gi,
-    /(?:^|[.!?]\s+)while\s+specific\s+details\s+are\s+limited,?\s*/gi,
-    /(?:^|[.!?]\s+)based\s+on\s+available\s+information,?\s*/gi,
-    /(?:^|[.!?]\s+)in\s+the\s+(?:provided|available)\s+sources,?\s*/gi,
+    /(^|[.!?]\s+)(?:as\s+of\s+(?:my\s+last\s+update|2023|2024|2025|2026),?\s*|up\s+to\s+my\s+last\s+training\s+update,?\s*)/gi,
+    /(^|[.!?]\s+)while\s+specific\s+details\s+are\s+limited,?\s*/gi,
+    /(^|[.!?]\s+)based\s+on\s+available\s+information,?\s*/gi,
+    /(^|[.!?]\s+)in\s+the\s+(?:provided|available)\s+sources,?\s*/gi,
   ];
 
   for (const d of disclaimers) {
-    if (d.pattern.test(modified)) {
-      modified = modified.replace(d.pattern, (m, p1) => {
+    if (d.test(modified)) {
+      modified = modified.replace(d, (m, p1) => {
         applied = true;
         return p1 ? `${p1} ` : '';
       });
@@ -994,8 +1099,8 @@ export function rule25_removePreviousVersionMentions(text: string): { text: stri
   let applied = false;
 
   const versionPatterns = [
-    /(?:^|[.!?]\s+)(?:This\s+function\s+was\s+added\s+to\s+replace\s+the\s+previous\s+approach[^.]*\.\s*)/gi,
-    /(?:^|[.!?]\s+)(?:Unlike\s+the\s+previous\s+version,?\s*)/gi,
+    /(^|[.!?]\s+)(?:This\s+function\s+was\s+added\s+to\s+replace\s+the\s+previous\s+approach[^.]*\.\s*)/gi,
+    /(^|[.!?]\s+)(?:Unlike\s+the\s+previous\s+version,?\s*)/gi,
   ];
 
   for (const vp of versionPatterns) {
@@ -1152,12 +1257,36 @@ export function humanizeText25Rules(
     rulesApplied.push('Rule 11: Restored natural human subject to agentless clauses');
   }
 
+  // §13: Inflated significance
+  const r13 = rule13_stripInflatedSignificance(result);
+  if (r13.applied) {
+    result = r13.text;
+    count++;
+    rulesApplied.push('Rule 13: Removed inflated significance and decorative status claims');
+  }
+
+  // §14: Vague connection or association
+  const r14 = rule14_clarifyVagueConnections(result);
+  if (r14.applied) {
+    result = r14.text;
+    count++;
+    rulesApplied.push('Rule 14: Clarified vague relational connectors');
+  }
+
   // §15: Shallow -ing riders
   const r15 = rule15_stripShallowIngRiders(result);
   if (r15.applied) {
     result = r15.text;
     count++;
     rulesApplied.push('Rule 15: Removed shallow trailing -ing participle riders');
+  }
+
+  // §16: Sales language
+  const r16 = rule16_purgeSalesLanguage(result);
+  if (r16.applied) {
+    result = r16.text;
+    count++;
+    rulesApplied.push('Rule 16: Purged promotional puffery and sales language');
   }
 
   // §17: Borrowed authority
@@ -1184,13 +1313,45 @@ export function humanizeText25Rules(
     rulesApplied.push('Rule 6: Smoothed forced three-part buzzword triads');
   }
 
-  // §12 & §16: Purge AI Vocabulary & Sales language
+  // §12: Purge AI Vocabulary
   const { cleanedText: unClicheText, replacedCount: vocabReplaced } = sanitizeAiVocabulary(result);
   if (vocabReplaced > 0) {
     result = unClicheText;
     count += vocabReplaced;
-    rulesApplied.push(`Rule 12/16: Replaced ${vocabReplaced} overused AI tell words`);
+    rulesApplied.push(`Rule 12: Replaced ${vocabReplaced} overused AI tell words`);
   }
+
+  // §7: Diversify repeated openings if multi-sentence
+  const sentences = result.match(/[^.!?]+[.!?]+/g) || [result];
+  if (sentences.length > 1) {
+    const diversified = rule7_diversifyRepeatedOpenings(sentences);
+    if (diversified.some((s, idx) => s !== sentences[idx])) {
+      result = diversified.join(' ');
+      count++;
+      rulesApplied.push('Rule 7: Diversified repetitive sentence openings');
+    }
+  }
+
+  // Verification pass: check the 5 tells that most often survive a rewrite
+  // 1. Not-X-but-Y contrast
+  const postR1 = rule1_eliminateNotXButY(result);
+  if (postR1.applied) result = postR1.text;
+
+  // 2. One-line closer
+  const postR2 = rule2_cleanClosersAndDramaticFragments(result);
+  if (postR2.applied) result = postR2.text;
+
+  // 3. Em dashes or en dashes (STRICT: zero em-dashes allowed)
+  const postR8 = rule8_eliminateAllDashes(result);
+  if (postR8.applied) result = postR8.text;
+
+  // 4. Triad
+  const postR6 = rule6_smoothForcedTriads(result);
+  if (postR6.applied) result = postR6.text;
+
+  // 5. Bold label
+  const postR19 = rule19_stripDecorativeBolding(result);
+  if (postR19.applied) result = postR19.text;
 
   // Clean spacing safely without ever touching decimal numbers or statistics
   result = result
@@ -1555,3 +1716,378 @@ export function estimateAiBypassLikelihood(
 
   return Math.min(99, Math.max(25, Math.round(likelihood)));
 }
+
+export interface DetectedAiTell {
+  ruleId: string; // e.g. '§1', '§8', '§12'
+  ruleNumber: number;
+  ruleName: string;
+  category: 'Staging' | 'Rhythm' | 'Inflation' | 'Formatting' | 'Leftovers';
+  severity: 'high' | 'medium' | 'low';
+  matchedSnippet: string;
+  explanation: string;
+  replacementSuggestion?: string;
+}
+
+/**
+ * Scans text thoroughly against all 25 Wikipedia Anti-AI rules,
+ * returning every pattern flagged for elimination.
+ */
+export function detectAllAiTells(text: string): DetectedAiTell[] {
+  const tells: DetectedAiTell[] = [];
+  if (!text || !text.trim()) return tells;
+
+  // A. Staging
+  // §1 Not X but Y
+  const notXMatch = text.match(/\b(?:it\s+is\s+)?not\s+(?:only|just|merely)?\s*[^,;.!?]+?(?:,\s*but\s+(?:also\s+)?|\s+rather\s+than\s+)[^,;.!?]+/i);
+  if (notXMatch) {
+    tells.push({
+      ruleId: '§1',
+      ruleNumber: 1,
+      ruleName: 'Not X but Y',
+      category: 'Staging',
+      severity: 'high',
+      matchedSnippet: notXMatch[0],
+      explanation: 'AI models construct artificial contrast before delivering the real fact.',
+      replacementSuggestion: 'State the point directly without contrasting against what it is not.',
+    });
+  }
+
+  // §2 One-line closers and dramatic fragments
+  const closerMatch = text.match(/\b(?:that(?:'s|\s+is)\s+the\s+real\s+win|read\s+that\s+again|let\s+that\s+sink\s+in|and\s+that\s+changes\s+everything|the\s+rest\s+is\s+history|and\s+it\s+shows|it's\s+that\s+simple)\b/i);
+  if (closerMatch) {
+    tells.push({
+      ruleId: '§2',
+      ruleNumber: 2,
+      ruleName: 'One-line closers and dramatic fragments',
+      category: 'Staging',
+      severity: 'high',
+      matchedSnippet: closerMatch[0],
+      explanation: 'Canned one-line mic-drop summaries add theatrical weight instead of substantive information.',
+      replacementSuggestion: 'Delete the closer or state concrete factual outcome.',
+    });
+  }
+
+  // §3 Sayings that sound deep
+  const sayingsMatch = text.match(/\b(?:at\s+its\s+core|what\s+really\s+matters\s+is|the\s+real\s+question\s+is|the\s+deeper\s+issue|the\s+heart\s+of\s+the\s+matter|becomes\s+a\s+trap|the\s+currency\s+of|the\s+language\s+of)\b/i);
+  if (sayingsMatch) {
+    tells.push({
+      ruleId: '§3',
+      ruleNumber: 3,
+      ruleName: 'Sayings that sound deep',
+      category: 'Staging',
+      severity: 'high',
+      matchedSnippet: sayingsMatch[0],
+      explanation: 'Vague philosophical aphorisms that simulate profundity without factual detail.',
+      replacementSuggestion: 'Replace with specific, observable claims.',
+    });
+  }
+
+  // §4 Staged run-up
+  const runUpMatch = text.match(/\b(?:let's\s+(?:dive\s+in|take\s+a\s+closer\s+look|explore)|here's\s+what\s+you\s+need\s+to\s+know|without\s+further\s+ado|honestly\?|real\s+talk)\b/i);
+  if (runUpMatch) {
+    tells.push({
+      ruleId: '§4',
+      ruleNumber: 4,
+      ruleName: 'Staged run-up before the point',
+      category: 'Staging',
+      severity: 'high',
+      matchedSnippet: runUpMatch[0],
+      explanation: 'Conversational throat-clearing that wastes the reader’s time.',
+      replacementSuggestion: 'Delete the staging phrase and begin directly with the subject.',
+    });
+  }
+
+  // §5 Arguing with no one
+  const arguingMatch = text.match(/\b(?:this\s+isn't\s+(?:mainly\s+)?about|i'm\s+not\s+saying|to\s+be\s+clear|don't\s+get\s+me\s+wrong|this\s+is\s+not\s+to\s+say|one\s+might\s+be\s+tempted\s+to)\b/i);
+  if (arguingMatch) {
+    tells.push({
+      ruleId: '§5',
+      ruleNumber: 5,
+      ruleName: 'Arguing with no one',
+      category: 'Staging',
+      severity: 'high',
+      matchedSnippet: arguingMatch[0],
+      explanation: 'Preemptive self-defense answering hypothetical objections unraised by the reader.',
+      replacementSuggestion: 'State your claim positively without disclaiming alternative positions.',
+    });
+  }
+
+  // B. Rhythm
+  // §6 Forced triads
+  const triadMatch = text.match(/\b([A-Za-z]+),\s+([A-Za-z]+),\s+and\s+([A-Za-z]+)\b/);
+  if (triadMatch) {
+    tells.push({
+      ruleId: '§6',
+      ruleNumber: 6,
+      ruleName: 'Forced triads',
+      category: 'Rhythm',
+      severity: 'medium',
+      matchedSnippet: triadMatch[0],
+      explanation: 'Mechanical grouping of concepts into threes is an omnipresent AI rhythm marker.',
+      replacementSuggestion: 'Reduce to two strong elements or separate into distinct statements.',
+    });
+  }
+
+  // §8 Dashes as universal connector
+  const dashMatch = text.match(/[—–]|(?:\s+--\s+)/);
+  if (dashMatch) {
+    tells.push({
+      ruleId: '§8',
+      ruleNumber: 8,
+      ruleName: 'Dashes as the universal connector',
+      category: 'Rhythm',
+      severity: 'high',
+      matchedSnippet: dashMatch[0],
+      explanation: 'Em and en dashes are primary triggers for automated AI classifiers (GPTZero/Turnitin).',
+      replacementSuggestion: 'Replace with commas, periods, colons, parentheses, or restructure the clause.',
+    });
+  }
+
+  // §9 Stacked qualifiers
+  const stackedMatch = text.match(/\b(?:could\s+potentially\s+possibly|might\s+arguably|to\s+be\s+fair,?\s*it's\s+also\s+possible)\b/i);
+  if (stackedMatch) {
+    tells.push({
+      ruleId: '§9',
+      ruleNumber: 9,
+      ruleName: 'Stacked qualifiers',
+      category: 'Rhythm',
+      severity: 'medium',
+      matchedSnippet: stackedMatch[0],
+      explanation: 'Layered hedging softens claims until the assertion evaporates.',
+      replacementSuggestion: 'State the assertion directly or use a single auxiliary verb (e.g. "may").',
+    });
+  }
+
+  // §10 Hyphenated pairs
+  const hyphenMatch = text.match(/\b(?:is|was|are|were|remains?)\s+(?:high-quality|real-time|well-known)\b/i);
+  if (hyphenMatch) {
+    tells.push({
+      ruleId: '§10',
+      ruleNumber: 10,
+      ruleName: 'Hyphenated pairs everywhere',
+      category: 'Rhythm',
+      severity: 'low',
+      matchedSnippet: hyphenMatch[0],
+      explanation: 'Overzealous hyphenation in predicative position after verbs.',
+      replacementSuggestion: 'Remove unnecessary hyphens when compound modifiers follow the noun/verb.',
+    });
+  }
+
+  // §11 Passive voice & missing subjects
+  const passiveMatch = text.match(/\b(?:was|were|has\s+been|have\s+been|is\s+being|are\s+being)\s+(?:analyzed|evaluated|conducted|implemented|observed|performed)\s+using\b/i);
+  if (passiveMatch) {
+    tells.push({
+      ruleId: '§11',
+      ruleNumber: 11,
+      ruleName: 'Passive voice and missing subjects',
+      category: 'Rhythm',
+      severity: 'medium',
+      matchedSnippet: passiveMatch[0],
+      explanation: 'Agentless passive construction hides the actor and produces robotic cadence.',
+      replacementSuggestion: 'Restructure into active voice with explicit subject acting on the object.',
+    });
+  }
+
+  // C. Inflation and borrowed authority
+  // §12 Overused AI words
+  for (const [word, cfg] of Object.entries(AI_VOCABULARY_MAP)) {
+    const match = text.match(cfg.pattern);
+    if (match) {
+      tells.push({
+        ruleId: '§12',
+        ruleNumber: 12,
+        ruleName: `Overused AI word ("${word}")`,
+        category: 'Inflation',
+        severity: 'high',
+        matchedSnippet: match[0],
+        explanation: `"${word}" is disproportionately selected by LLMs compared to human writers.`,
+        replacementSuggestion: `Use natural plain alternatives: ${cfg.replacements.slice(0, 3).join(', ')}.`,
+      });
+    }
+  }
+
+  // §13 Inflated significance
+  const significanceMatch = text.match(/\b(?:stands?\s+as\s+a\s+testament|marking\s+a\s+pivotal\s+moment|plays?\s+a\s+(?:pivotal|crucial)\s+role|underscores?\s+its\s+importance|an?\s+enduring\s+legacy|setting\s+the\s+stage\s+for|evolving\s+landscape|indelible\s+mark)\b/i);
+  if (significanceMatch) {
+    tells.push({
+      ruleId: '§13',
+      ruleNumber: 13,
+      ruleName: 'Inflated significance',
+      category: 'Inflation',
+      severity: 'high',
+      matchedSnippet: significanceMatch[0],
+      explanation: 'Dressing ordinary observations in monumental or historic significance.',
+      replacementSuggestion: 'Delete the decorative significance wrapper and report the factual finding.',
+    });
+  }
+
+  // §14 Vague connection
+  const vagueMatch = text.match(/\b(?:in\s+association\s+with|in\s+connection\s+with|closely\s+tied\s+to)\b/i);
+  if (vagueMatch) {
+    tells.push({
+      ruleId: '§14',
+      ruleNumber: 14,
+      ruleName: 'Vague connection or association',
+      category: 'Inflation',
+      severity: 'medium',
+      matchedSnippet: vagueMatch[0],
+      explanation: 'Vague relational phrasing instead of naming the precise mechanical interaction.',
+      replacementSuggestion: 'Replace with specific transitive verbs or precise relationships.',
+    });
+  }
+
+  // §15 Shallow -ing riders
+  const riderMatch = text.match(/,\s*(?:highlighting|underscoring|emphasizing|ensuring|reflecting|symbolizing|fostering|showcasing)\s+[^.]+([.!?])/i);
+  if (riderMatch) {
+    tells.push({
+      ruleId: '§15',
+      ruleNumber: 15,
+      ruleName: 'Shallow -ing riders',
+      category: 'Inflation',
+      severity: 'high',
+      matchedSnippet: riderMatch[0],
+      explanation: 'Superficial participle clause tacked onto sentence ends to add unearned narrative weight.',
+      replacementSuggestion: 'End the sentence at the main clause; delete the participial rider.',
+    });
+  }
+
+  // §16 Sales language
+  const salesMatch = text.match(/\b(?:boasts|groundbreaking|breathtaking|stunning|nestled\s+in|a\s+must-visit|diverse\s+array)\b/i);
+  if (salesMatch) {
+    tells.push({
+      ruleId: '§16',
+      ruleNumber: 16,
+      ruleName: 'Sales language & promotional puffery',
+      category: 'Inflation',
+      severity: 'high',
+      matchedSnippet: salesMatch[0],
+      explanation: 'Marketing tone and hyperbole inappropriate for objective or analytical prose.',
+      replacementSuggestion: 'Use objective, neutral descriptive language.',
+    });
+  }
+
+  // §17 Borrowed authority
+  const authorityMatch = text.match(/\b(?:industry\s+reports\s+suggest|observers\s+have\s+cited|experts\s+argue\s+that)\b/i);
+  if (authorityMatch) {
+    tells.push({
+      ruleId: '§17',
+      ruleNumber: 17,
+      ruleName: 'Borrowed authority & vague consensus',
+      category: 'Inflation',
+      severity: 'medium',
+      matchedSnippet: authorityMatch[0],
+      explanation: 'Citing anonymous "experts" or vague "observers" as false consensus.',
+      replacementSuggestion: 'Cite the specific named paper or author, or attribute plainly.',
+    });
+  }
+
+  // §18 Avoiding is, are, and has
+  const copulaMatch = text.match(/\b(?:serves?\s+as|stands?\s+as|functions?\s+as|operates?\s+as|represents?\s+an?)\b/i);
+  if (copulaMatch) {
+    tells.push({
+      ruleId: '§18',
+      ruleNumber: 18,
+      ruleName: 'Avoiding is, are, and has',
+      category: 'Inflation',
+      severity: 'medium',
+      matchedSnippet: copulaMatch[0],
+      explanation: 'AI avoids plain copula verbs (is, are, has) with pompous substitutes.',
+      replacementSuggestion: 'Use direct, natural "is", "are", or "has".',
+    });
+  }
+
+  // D. Formatting
+  // §19 Bold as decoration
+  const boldMatch = text.match(/\*\*[^*]+\*\*/);
+  if (boldMatch) {
+    tells.push({
+      ruleId: '§19',
+      ruleNumber: 19,
+      ruleName: 'Bold as decoration',
+      category: 'Formatting',
+      severity: 'medium',
+      matchedSnippet: boldMatch[0],
+      explanation: 'Arbitrary bold formatting inside continuous prose.',
+      replacementSuggestion: 'Remove markdown bold markers in running body text.',
+    });
+  }
+
+  // §20 Decorative headings & emojis
+  const emojiMatch = text.match(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u);
+  if (emojiMatch) {
+    tells.push({
+      ruleId: '§20',
+      ruleNumber: 20,
+      ruleName: 'Decorative emojis and icons',
+      category: 'Formatting',
+      severity: 'high',
+      matchedSnippet: emojiMatch[0],
+      explanation: 'Emojis in headings or text are a dead giveaway of chatbot generation.',
+      replacementSuggestion: 'Remove all emojis and decorative symbols from text.',
+    });
+  }
+
+  // §21 Curly quotation marks
+  const curlyMatch = text.match(/[“”‘’]/);
+  if (curlyMatch) {
+    tells.push({
+      ruleId: '§21',
+      ruleNumber: 21,
+      ruleName: 'Curly quotation marks',
+      category: 'Formatting',
+      severity: 'low',
+      matchedSnippet: curlyMatch[0],
+      explanation: 'Inconsistent typography; standard ASCII straight quotes are cleaner across platforms.',
+      replacementSuggestion: 'Standardize to ASCII straight quotes (" and \').',
+    });
+  }
+
+  // E. Leftovers
+  // §22 Chatbot residue
+  const residueMatch = text.match(/\b(?:i\s+hope\s+this\s+helps|certainly!|great\s+question|here\s+is\s+a\s+(?:breakdown|summary)|would\s+you\s+like\s+me\s+to)\b/i);
+  if (residueMatch) {
+    tells.push({
+      ruleId: '§22',
+      ruleNumber: 22,
+      ruleName: 'Chatbot residue',
+      category: 'Leftovers',
+      severity: 'high',
+      matchedSnippet: residueMatch[0],
+      explanation: 'Conversational assistant boilerplate left behind in the document.',
+      replacementSuggestion: 'Delete all assistant greetings, sign-offs, and conversational wrappers.',
+    });
+  }
+
+  // §23 Knowledge limit disclaimers
+  const disclaimerMatch = text.match(/\b(?:as\s+of\s+(?:my\s+last\s+update|2023|2024|2025|2026)|up\s+to\s+my\s+last\s+training|while\s+specific\s+details\s+are\s+limited)\b/i);
+  if (disclaimerMatch) {
+    tells.push({
+      ruleId: '§23',
+      ruleNumber: 23,
+      ruleName: 'Knowledge-limit disclaimers',
+      category: 'Leftovers',
+      severity: 'high',
+      matchedSnippet: disclaimerMatch[0],
+      explanation: 'LLM training cutoff excuses and knowledge-limit apologies.',
+      replacementSuggestion: 'Remove knowledge-cutoff disclaimers entirely.',
+    });
+  }
+
+  // §25 Previous version mentions
+  const versionMatch = text.match(/\b(?:unlike\s+the\s+previous\s+version|this\s+function\s+was\s+added\s+to\s+replace)\b/i);
+  if (versionMatch) {
+    tells.push({
+      ruleId: '§25',
+      ruleNumber: 25,
+      ruleName: 'Writing about the previous version',
+      category: 'Leftovers',
+      severity: 'medium',
+      matchedSnippet: versionMatch[0],
+      explanation: 'Meta-commentary about earlier drafts or previous software versions.',
+      replacementSuggestion: 'Describe current state directly without referencing previous iterations.',
+    });
+  }
+
+  return tells;
+}
+
