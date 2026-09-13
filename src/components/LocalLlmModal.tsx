@@ -79,8 +79,8 @@ export function LocalLlmModal({ isOpen, onClose, config, onChange }: LocalLlmMod
               <Cpu className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-base font-semibold text-white">Local LLM Configuration</h3>
-              <p className="text-xs text-slate-400">Connect Google Gemma, Llama, or custom local runners</p>
+              <h3 className="text-base font-semibold text-white">Local LLM Setup</h3>
+              <p className="text-xs text-slate-400">Connect on-device models via Ollama or OpenAI-compatible servers</p>
             </div>
           </div>
           <button
@@ -97,7 +97,7 @@ export function LocalLlmModal({ isOpen, onClose, config, onChange }: LocalLlmMod
           {/* Provider Preset Buttons */}
           <div>
             <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
-              Inference Framework
+              Server Type
             </label>
             <div className="grid grid-cols-2 gap-3">
               <button
@@ -120,7 +120,7 @@ export function LocalLlmModal({ isOpen, onClose, config, onChange }: LocalLlmMod
                   <span>Ollama</span>
                   <span className="text-[10px] bg-slate-800 px-1.5 py-0.5 rounded text-slate-400">Port 11434</span>
                 </div>
-                <div className="text-xs text-slate-400 mt-1">Recommended for Gemma 2, Mistral, Llama 3</div>
+                <div className="text-xs text-slate-400 mt-1">Default for Gemma, Llama 3, Mistral</div>
               </button>
 
               <button
@@ -143,7 +143,7 @@ export function LocalLlmModal({ isOpen, onClose, config, onChange }: LocalLlmMod
                   <span>LM Studio / vLLM</span>
                   <span className="text-[10px] bg-slate-800 px-1.5 py-0.5 rounded text-slate-400">Port 1234 / 8000</span>
                 </div>
-                <div className="text-xs text-slate-400 mt-1">OpenAI-compatible local HTTP servers</div>
+                <div className="text-xs text-slate-400 mt-1">OpenAI API compatible endpoints</div>
               </button>
             </div>
           </div>
@@ -151,7 +151,7 @@ export function LocalLlmModal({ isOpen, onClose, config, onChange }: LocalLlmMod
           {/* Endpoint URL Input */}
           <div>
             <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-              Endpoint Address
+              Endpoint URL
             </label>
             <div className="flex rounded-xl overflow-hidden border border-slate-700 bg-slate-800/80 focus-within:border-amber-500 focus-within:ring-1 focus-within:ring-amber-500">
               <span className="inline-flex items-center px-3 text-slate-400 bg-slate-800 text-xs border-r border-slate-700">
@@ -168,8 +168,8 @@ export function LocalLlmModal({ isOpen, onClose, config, onChange }: LocalLlmMod
             </div>
             <p className="text-[11px] text-slate-400 mt-1">
               {localConfig.provider === 'ollama'
-                ? 'Standard Ollama server endpoint (default: http://localhost:11434 or http://127.0.0.1:11434)'
-                : 'OpenAI-compatible server endpoint (e.g. http://localhost:1234/v1)'}
+                ? 'Local server address (e.g. http://localhost:11434 or your HTTPS tunnel URL)'
+                : 'Local server address (e.g. http://localhost:1234 or your HTTPS tunnel URL)'}
             </p>
           </div>
 
@@ -177,40 +177,35 @@ export function LocalLlmModal({ isOpen, onClose, config, onChange }: LocalLlmMod
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                Model Name / Tag
+                Model Name
               </label>
               {testStatus?.models && testStatus.models.length > 0 && (
                 <span className="text-[11px] text-emerald-400 font-medium">
-                  {testStatus.models.length} local models detected
+                  {testStatus.models.length} model{testStatus.models.length === 1 ? '' : 's'} available
                 </span>
               )}
             </div>
 
             {/* Quick Model Presets */}
             <div className="flex flex-wrap items-center gap-1.5 mb-2">
-              <span className="text-[11px] text-slate-400 mr-1">Quick Select:</span>
+              <span className="text-[11px] text-slate-400 mr-1">Popular:</span>
               {[
-                { tag: 'gemma4', label: 'gemma4', badge: 'On Device' },
-                { tag: 'gemma2', label: 'gemma2', badge: null },
-                { tag: 'gemma:7b', label: 'gemma:7b', badge: null },
-                { tag: 'gemma:2b', label: 'gemma:2b', badge: null },
-              ].map(({ tag, label, badge }) => (
+                { tag: 'gemma4', label: 'gemma4' },
+                { tag: 'gemma2', label: 'gemma2' },
+                { tag: 'llama3.2', label: 'llama3.2' },
+                { tag: 'mistral', label: 'mistral' },
+              ].map(({ tag, label }) => (
                 <button
                   key={tag}
                   type="button"
                   onClick={() => setLocalConfig({ ...localConfig, modelName: tag })}
-                  className={`px-2 py-0.5 rounded-md text-xs font-medium border transition-all ${
+                  className={`px-2.5 py-1 rounded-md text-xs font-medium border transition-all ${
                     localConfig.modelName === tag
                       ? 'bg-amber-500/20 border-amber-500 text-amber-200 ring-1 ring-amber-500/40'
                       : 'bg-slate-800 border-slate-700 text-slate-300 hover:border-slate-600'
                   }`}
                 >
                   {label}
-                  {badge && (
-                    <span className="ml-1 text-[9px] bg-amber-500/30 text-amber-300 px-1 py-0.2 rounded font-semibold">
-                      {badge}
-                    </span>
-                  )}
                 </button>
               ))}
             </div>
@@ -225,10 +220,9 @@ export function LocalLlmModal({ isOpen, onClose, config, onChange }: LocalLlmMod
                 >
                   {testStatus.models.map((m) => (
                     <option key={m} value={m}>
-                      {m} {m === 'gemma4' ? '(Target Model)' : ''}
+                      {m}
                     </option>
                   ))}
-                  <option value="gemma4">gemma4 (Configured on Device)</option>
                   <option value="__custom__">+ Enter custom model name...</option>
                 </select>
                 {localConfig.modelName === '__custom__' && (
@@ -251,7 +245,7 @@ export function LocalLlmModal({ isOpen, onClose, config, onChange }: LocalLlmMod
               />
             )}
             <p className="text-[11px] text-slate-400 mt-1">
-              Configured for <code className="text-amber-300 font-semibold">{localConfig.modelName}</code> on your device.
+              Active model: <code className="text-amber-300 font-semibold">{localConfig.modelName}</code>
             </p>
           </div>
 
@@ -259,9 +253,9 @@ export function LocalLlmModal({ isOpen, onClose, config, onChange }: LocalLlmMod
           <div className="pt-2 border-t border-slate-800 flex flex-col space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex flex-col">
-                <span className="text-xs font-semibold text-slate-200">Server Proxy Routing</span>
+                <span className="text-xs font-semibold text-slate-200">Backend Proxy Routing</span>
                 <span className="text-[11px] text-slate-400">
-                  Enable if using a tunnel URL or local server proxy
+                  Routes requests through app server (bypasses browser CORS & mixed-content restrictions)
                 </span>
               </div>
               <input
@@ -283,7 +277,7 @@ export function LocalLlmModal({ isOpen, onClose, config, onChange }: LocalLlmMod
                 className="inline-flex items-center px-3.5 py-1.5 text-xs font-medium rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors disabled:opacity-50"
               >
                 <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${isTesting ? 'animate-spin text-amber-400' : ''}`} />
-                {isTesting ? 'Pinging Local Endpoint...' : 'Test Connection'}
+                {isTesting ? 'Testing Connection...' : 'Test Connection'}
               </button>
 
               {testStatus && (
@@ -296,7 +290,7 @@ export function LocalLlmModal({ isOpen, onClose, config, onChange }: LocalLlmMod
                   ) : (
                     <span className="text-rose-400 flex items-center font-medium" title={testStatus.error}>
                       <AlertCircle className="w-4 h-4 mr-1 text-rose-400" />
-                      Unreachable
+                      Cannot Connect
                     </span>
                   )}
                 </div>
@@ -304,83 +298,51 @@ export function LocalLlmModal({ isOpen, onClose, config, onChange }: LocalLlmMod
             </div>
 
             {testStatus && !testStatus.online && (
-              <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs text-amber-200 space-y-2">
-                <div className="flex items-center space-x-1.5 font-semibold text-amber-300">
-                  <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
-                  <span>Why localhost:11434 works in a browser tab but is blocked here:</span>
+              <div className="p-3.5 rounded-xl bg-slate-950 border border-rose-500/30 text-xs space-y-2.5">
+                <div className="flex items-center space-x-2 text-rose-300 font-semibold">
+                  <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                  <span>Connection Failed</span>
                 </div>
-                <p className="text-[11px] text-slate-300 leading-relaxed">
-                  Opening <code className="text-amber-300">http://localhost:11434</code> in its own tab works because both are plain HTTP. But because this app runs over <code className="text-emerald-400">HTTPS</code> in the cloud, your browser blocks cross-origin connections to local machine ports for security.
-                </p>
-                <div className="bg-slate-950/90 p-2.5 rounded border border-amber-500/20 space-y-1.5">
-                  <span className="text-[11px] font-semibold text-amber-300 block">
-                    Fastest Fix (Instant 1-Line HTTPS Tunnel):
+                {testStatus.error && (
+                  <p className="text-[11px] text-slate-300 font-mono bg-slate-900 p-2 rounded border border-slate-800">
+                    {testStatus.error}
+                  </p>
+                )}
+
+                <div className="pt-1 space-y-2">
+                  <span className="text-[11px] font-semibold text-slate-200 block">
+                    Troubleshooting Steps:
                   </span>
-                  <p className="text-[11px] text-slate-400">
-                    Open PowerShell on your PC and run:
-                  </p>
-                  <pre className="text-[11px] text-amber-300 bg-slate-900 p-1.5 rounded font-mono select-all overflow-x-auto">
+                  <div className="space-y-2 text-[11px] text-slate-400 leading-relaxed">
+                    <div className="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800">
+                      <strong className="text-amber-300 block mb-1">Option 1: Allow Cross-Origin (Ollama on Windows/Mac/Linux)</strong>
+                      <p className="mb-1.5 text-slate-300">
+                        Quit Ollama from your system tray/taskbar, then run in terminal to enable origins:
+                      </p>
+                      <pre className="text-[10px] text-amber-300 bg-slate-950 p-1.5 rounded font-mono select-all overflow-x-auto">
+OLLAMA_ORIGINS="*" ollama serve
+                      </pre>
+                      <span className="text-slate-500 text-[10px] block mt-1">
+                        On Windows PowerShell: <code className="text-amber-300">[System.Environment]::SetEnvironmentVariable('OLLAMA_ORIGINS', '*', 'User')</code>
+                      </span>
+                    </div>
+
+                    <div className="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800">
+                      <strong className="text-emerald-300 block mb-1">Option 2: HTTPS Tunnel (Recommended for cloud preview)</strong>
+                      <p className="mb-1 text-slate-300">
+                        Because this web app runs over secure HTTPS, expose port 11434 with a free tunnel:
+                      </p>
+                      <pre className="text-[10px] text-emerald-300 bg-slate-950 p-1.5 rounded font-mono select-all overflow-x-auto">
 npx localtunnel --port 11434
-                  </pre>
-                  <p className="text-[11px] text-slate-400">
-                    Paste the provided <code className="text-amber-300">https://...</code> link into the <strong>Endpoint Address</strong> above and click <strong>Test Connection</strong>!
-                  </p>
+                      </pre>
+                      <p className="mt-1 text-slate-400 text-[10px]">
+                        Paste the generated <code className="text-emerald-300">https://...</code> URL into the Endpoint URL field above.
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
-          </div>
-
-          {/* Quick Guide & Solutions for Windows */}
-          <div className="bg-slate-950/70 rounded-xl p-4 border border-slate-800 text-xs space-y-3">
-            <div className="flex items-center text-amber-300 font-semibold text-xs tracking-wide">
-              <Terminal className="w-4 h-4 mr-1.5 text-amber-400" /> Windows & Local Connection Guide
-            </div>
-
-            {/* Reason 1: Windows Tray App */}
-            <div className="space-y-1 bg-slate-900/90 p-2.5 rounded-lg border border-slate-800">
-              <span className="text-slate-200 font-semibold text-[11px] block">
-                1. Set Windows System Environment Variable & Restart Ollama
-              </span>
-              <p className="text-[11px] text-slate-400 leading-relaxed">
-                On Windows, Ollama runs in the background system tray. A temporary terminal command doesn't change the tray app.
-              </p>
-              <ol className="list-decimal list-inside text-[11px] text-slate-300 space-y-1 mt-1 font-sans">
-                <li>
-                  Right-click the <strong className="text-amber-200">Ollama llama icon</strong> in your Windows Taskbar Tray (bottom right) and click <strong className="text-rose-300">Quit Ollama</strong>.
-                </li>
-                <li>
-                  In PowerShell, set it permanently:
-                  <pre className="mt-1 text-[11px] text-amber-300 bg-slate-950 p-2 rounded border border-slate-800 font-mono overflow-x-auto select-all">
-[System.Environment]::SetEnvironmentVariable('OLLAMA_ORIGINS', '*', 'User')
-                  </pre>
-                </li>
-                <li>Re-open Ollama from your Start menu and run <code className="text-amber-300">ollama run gemma4</code>.</li>
-              </ol>
-            </div>
-
-            {/* Reason 2: Browser Insecure Content or Tunnel */}
-            <div className="space-y-1 bg-slate-900/90 p-2.5 rounded-lg border border-slate-800">
-              <span className="text-slate-200 font-semibold text-[11px] block">
-                2. Browser HTTPS vs HTTP (Mixed Content)
-              </span>
-              <p className="text-[11px] text-slate-400 leading-relaxed">
-                Because this web app runs over <code className="text-emerald-400">https://</code>, Chrome/Edge blocks requests to insecure <code className="text-amber-300">http://localhost</code>. Choose either:
-              </p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-1.5">
-                <div className="bg-slate-950 p-2 rounded border border-slate-800 text-[11px]">
-                  <strong className="text-slate-200 block mb-0.5">Option A: Allow Insecure in Chrome</strong>
-                  Click the <strong className="text-amber-300">Tune/Padlock icon</strong> left of the URL bar ➔ <em>Site settings</em> ➔ change <strong>Insecure content</strong> to <strong>Allow</strong> ➔ refresh the page.
-                </div>
-                <div className="bg-slate-950 p-2 rounded border border-slate-800 text-[11px]">
-                  <strong className="text-slate-200 block mb-0.5">Option B: 1-Line Free HTTPS Tunnel</strong>
-                  Run in PowerShell:
-                  <pre className="text-[10px] text-amber-300 bg-slate-900 px-1.5 py-0.5 mt-0.5 rounded font-mono select-all">
-npx localtunnel --port 11434
-                  </pre>
-                  Copy the <code className="text-amber-300">https://...</code> URL into Endpoint above!
-                </div>
-              </div>
-            </div>
           </div>
         </div>
 
@@ -400,7 +362,7 @@ npx localtunnel --port 11434
             className="inline-flex items-center px-4 py-2 text-xs font-semibold text-slate-900 bg-amber-400 hover:bg-amber-300 rounded-lg shadow-sm transition-colors"
           >
             <Zap className="w-3.5 h-3.5 mr-1" />
-            Apply Local LLM
+            Save Configuration
           </button>
         </div>
       </div>

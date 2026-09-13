@@ -1,11 +1,19 @@
 import { ParaphraseConfig, ParagraphData, DocumentMetrics, SentenceData, ParaphraseProgress } from '../types';
 import { segmentSentences } from './paraphraserEngine';
 import { sanitizePunctuationSpacing } from './sanitizer';
+import { isSectionHeading, analyzeSentenceForParaphrasing } from './sentenceValidator';
+import {
+  SentenceRulePlan,
+  generateDeterministicRulePlan,
+  executeLinguisticRulePlan,
+} from './deterministicRuleEngine';
 import {
   sanitizeAiVocabulary,
   calculateBurstiness,
   countPreservedDomainTerms,
   estimateAiBypassLikelihood,
+  applyLinguisticHumanizationRules,
+  restoreDomainTerms,
 } from './humanizerAntiAi';
 
 export interface LocalLlmStatus {
@@ -99,7 +107,7 @@ export async function testLocalLlmConnection(
     if (err.name === 'TypeError' || err.message?.includes('Failed to fetch')) {
       if (isHttps && isLocalhostEndpoint) {
         errorDetail =
-          'Blocked by browser Mixed Content / Windows Ollama background service. See the two quick solutions below: (1) Set Windows System Variable & restart Ollama tray app, or (2) Run a 1-line HTTPS tunnel.';
+          'Local endpoint unreachable from browser (Mixed Content / Cross-Origin). Enable "Backend Proxy Routing" or use an HTTPS tunnel.';
       } else {
         errorDetail = `Could not reach ${cleanEndpoint}. Please verify that your local model runner is active.`;
       }
@@ -120,55 +128,63 @@ export function buildParaphrasePrompt(
   paragraphs: { text: string; isHeading?: boolean }[],
   tone: string
 ): { systemPrompt: string; userPrompt: string } {
-  const systemPrompt = `You are an elite text humanizer and abstractive paraphrasing engine specialized in defeating AI detectors.
-Your goal is to humanize AI text in ${tone.toUpperCase()} tone using linguistic rules and abstractive synthesis.
+  const systemPrompt = `You are an elite Linguistic Syntactic Architect and Paraphrasing Rule Planner.
 
-KEY STRATEGIES TO AVOID AI FLAGGING:
-1. VARY SENTENCE ARCHITECTURE (HIGH BURSTINESS):
-   - AI models generate sentences with uniform length and predictable rhythms.
-   - Actively combine short, punchy sentences (4-9 words) with longer, multi-clause complex sentences (20-35+ words).
-   - Never output repetitive sentence lengths.
+CRITICAL MANDATE:
+DO NOT WRITE OR GENERATE THE REWRITTEN SENTENCES OR PARAGRAPH DIRECTLY!
+DO NOT GENERATE REWRITTEN PARAGRAPH TEXT!
+If you write the paragraph yourself, AI detectors (GPTZero, Turnitin, Copyleaks) will detect high token predictability and penalize the document, raising the AI percentage.
 
-2. USE ABSTRACTIVE REWRITING OVER SYNONYM SWAPPING:
-   - Do NOT replace words line-by-line or swap synonyms in-place.
-   - Process the entire paragraph semantically, extract its core message, and synthesize completely new sentence structures from scratch.
+Instead, your role is to ANALYZE each sentence and SELECT which transformation rules and parameters from our deterministic linguistic rulebook should be applied to transform it:
 
-3. PRESERVE DOMAIN & METHODOLOGICAL TERMINOLOGY:
-   - Scientific and methodological terms MUST remain unchanged to keep the domain context natural:
-     * Invariants: "sample", "dataset", "correlated", "university students", "college students", "participants", "methodology", "regression", "p-value", "statistical significance".
-     * Never swap "sample" to "specimen" or "university students" to "tertiary learners"!
-     * Preserve 100% of statistical notations: (M = ..., SD = ..., p < .05, r = ..., percentages, N values, citations).
+LINGUISTIC RULES & PARAMETERS:
+1. "voiceDirective": "keep" (DEFAULT - preserve natural active authorial voice) | "active" (only to simplify wordy passive) | NEVER force active research sentences into passive voice.
+2. "reorderClause": false (DEFAULT - preserve original natural sentence structure and avoid fragmented clauses or lists).
+3. "nominalizeVerb": string or null (select verb to nominalize into academic noun phrase e.g. "analyze", "investigate", "evaluate", "demonstrate", "examine", "assess", "measure", "conclude", "correlate")
+4. "litotesShift": true | false (shift affirmative into academic litotes)
+5. "frontingPhrase": null (DEFAULT - do NOT inject artificial repetitive introductory frames like "In this empirical investigation," or "Within this framework,").
+6. "humanDiscourseMarker": null (DEFAULT - do NOT force artificial transitions like "Beyond this,", "Specifically,", "Equally important,". Only use when there is an abrupt transition that genuinely requires a connector, and NEVER use robotic "Furthermore", "Moreover", "In addition").
+7. "synonymSubstitutions": object mapping original word to preferred contextual replacement from academic dictionary:
+   * NEVER alter fixed multi-word scientific constructs: "systematic review" MUST NEVER become "ordered review". "social media use" or "problematic use" MUST NEVER have "use" replaced with "employ".
+   * NEVER alter numbers, statistical notations, sample sizes, or parenthetical metrics (e.g. "M = 31.41, SD = 7.78", "p < .001", "alpha = .89").
+   * NEVER use artificial or purple-prose synonyms (e.g. do not substitute "deleterious" for "harmful/negative").
+8. "splitSentence": boolean (split compound sentence to enhance burstiness)
+9. "combineWithNext": boolean (merge short sentences)
 
-4. STRICTLY AVOID "AI VOCABULARY" OVERUSE:
-   - NEVER use overused flowery AI words: "delve", "crucial", "pivotal", "testament", "fostering", "furthermore", "moreover", "tapestry", "beacon", "paramount", "multifaceted", "underscored", "navigating", "landscape", "harness", "meticulously", "interplay", "resonate", "catalyst", "embark", "shed light on", "in conclusion", "it is important to note that".
-   - Enforce a simpler, direct, authentic human lexicon.
-
-5. PART-OF-SPEECH PRECISION:
-   - Never substitute the noun "use" with the verb "utilize"! (e.g., keep "social media use", never "social media utilize").
-
-6. GUARANTEE A SINGLE SPACE after every terminal period, question mark, or exclamation point.
+STRICT GUARDS (MANDATORY):
+- If the text is a section heading, document title, or fragment lacking a finite verb/predicate: set "isProperSentence": false, "skipReason": "Heading or non-sentence fragment", and empty planned rules.
+- If the text contains words before a colon (e.g. "Note: "), extract that into "prefixToKeep", and only select rules for the remaining clause.
 
 OUTPUT FORMAT:
-Output ONLY valid JSON with this exact schema (no additional conversational text):
+Output ONLY valid JSON with this exact schema:
 {
   "paragraphs": [
     {
       "paragraphIndex": 0,
-      "paraphrasedText": "Full paraphrased paragraph text here...",
       "sentences": [
         {
-          "originalText": "Original sentence here...",
-          "paraphrasedText": "Paraphrased sentence here...",
-          "appliedVoice": "active",
-          "appliedStructure": "complex",
-          "rulesExplanation": ["Abstractive rewriting in academic tone"]
+          "sentenceIndex": 0,
+          "originalText": "...",
+          "isProperSentence": true,
+          "skipReason": null,
+          "prefixToKeep": null,
+          "voiceDirective": "keep",
+          "reorderClause": false,
+          "nominalizeVerb": null,
+          "litotesShift": false,
+          "frontingPhrase": null,
+          "humanDiscourseMarker": null,
+          "synonymSubstitutions": {},
+          "splitSentence": false,
+          "combineWithNext": false,
+          "selectedRules": ["Linguistic rule names"]
         }
       ]
     }
   ]
 }`;
 
-  const userPrompt = `Paraphrase the following ${paragraphs.length} paragraphs in ${tone} tone and respond ONLY with the JSON object:\n\n` +
+  const userPrompt = `Analyze the following ${paragraphs.length} paragraphs in ${tone} tone and output the linguistic rule selection plan JSON:\n\n` +
     JSON.stringify(
       paragraphs.map((p, idx) => ({
         paragraphIndex: idx,
@@ -290,6 +306,42 @@ async function processLocalLlmBatch(
 
   batchParagraphs.forEach((origP, localIdx) => {
     const actualIdx = batchOffsetIndex + localIdx;
+
+    // Strict guard for section headings & titles: do not modify
+    if (origP.isHeading || isSectionHeading(origP.text, origP.isHeading)) {
+      resultParagraphs.push({
+        id: `p-${actualIdx}`,
+        originalText: origP.text,
+        paraphrasedText: origP.text,
+        sentences: origP.text.trim()
+          ? [
+              {
+                id: `local-sent-${actualIdx}-0-${++globalSentCounter}`,
+                originalText: origP.text,
+                paraphrasedText: origP.text,
+                detectedVoice: 'neutral',
+                appliedVoice: 'neutral',
+                detectedStructure: 'simple',
+                appliedStructure: 'simple',
+                techniques: [],
+                wordChanges: [],
+                rulesExplanation: ['Preserved verbatim: Section heading / title (non-sentence)'],
+                isManuallyEdited: false,
+                paragraphIndex: actualIdx,
+                sentenceIndex: 0,
+                isProperSentence: false,
+                skippedReason: 'Section heading or title',
+              },
+            ]
+          : [],
+        styleName: origP.styleName,
+        isHeading: true,
+        headingLevel: origP.headingLevel,
+        xmlNodeIndex: origP.xmlNodeIndex,
+      });
+      return;
+    }
+
     const pData = parsed?.paragraphs?.find((item: any) => item.paragraphIndex === localIdx) || parsed?.paragraphs?.[localIdx];
     const originalSentences = segmentSentences(origP.text);
     const aiSentences = Array.isArray(pData?.sentences) ? pData.sentences : [];
@@ -299,50 +351,163 @@ async function processLocalLlmBatch(
     if (aiSentences.length > 0) {
       aiSentences.forEach((aiS: any, sIdx: number) => {
         const origText = aiS.originalText || originalSentences[sIdx] || '';
-        const paraText = sanitizePunctuationSpacing(aiS.paraphrasedText || '');
+        const analysis = analyzeSentenceForParaphrasing(origText, origP.isHeading);
+
+        // If not a proper sentence (words before colon alone, fragment, no verb/subject), keep verbatim
+        if (!analysis.shouldParaphrase) {
+          sentenceDataList.push({
+            id: `local-sent-${actualIdx}-${sIdx}-${++globalSentCounter}`,
+            originalText: origText,
+            paraphrasedText: origText,
+            detectedVoice: 'neutral',
+            appliedVoice: 'neutral',
+            detectedStructure: 'simple',
+            appliedStructure: 'simple',
+            techniques: [],
+            wordChanges: [],
+            rulesExplanation: [`Preserved verbatim: ${analysis.reason}`],
+            isManuallyEdited: false,
+            paragraphIndex: actualIdx,
+            sentenceIndex: sIdx,
+            isProperSentence: false,
+            skippedReason: analysis.reason,
+          });
+          return;
+        }
+
+        // Construct linguistic rule plan selected by the model or planned deterministically
+        const plan: SentenceRulePlan = {
+          sentenceIndex: sIdx,
+          isProperSentence: true,
+          voiceDirective: aiS.voiceDirective || (aiS.appliedVoice === 'passive' ? 'passive' : aiS.appliedVoice === 'active' ? 'active' : 'keep'),
+          reorderClause: aiS.reorderClause ?? false,
+          nominalizeVerb: aiS.nominalizeVerb || null,
+          litotesShift: aiS.litotesShift ?? false,
+          frontingPhrase: aiS.frontingPhrase || null,
+          humanDiscourseMarker: aiS.humanDiscourseMarker || null,
+          synonymSubstitutions: aiS.synonymSubstitutions || {},
+          splitSentence: aiS.splitSentence ?? false,
+          combineWithNext: aiS.combineWithNext ?? false,
+          selectedRules: Array.isArray(aiS.selectedRules) ? aiS.selectedRules : [],
+        };
+
+        const execRes = executeLinguisticRulePlan(
+          analysis.coreSentenceToParaphrase || origText,
+          plan,
+          config.tone,
+          config.preserveTechnicalTerms
+        );
+
+        let paraText = execRes.paraphrasedText;
+
+        // If sentence had a prefix before colon (e.g., "Note: "), ensure the label is preserved verbatim
+        if (analysis.prefixToKeep) {
+          const prefixEscaped = analysis.prefixToKeep.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const prefixRegex = new RegExp(`^${prefixEscaped}\\s*`, 'i');
+          if (!prefixRegex.test(paraText)) {
+            paraText = `${analysis.prefixToKeep} ${paraText}`;
+          }
+        }
 
         sentenceDataList.push({
           id: `local-sent-${actualIdx}-${sIdx}-${++globalSentCounter}`,
           originalText: origText,
           paraphrasedText: paraText,
-          detectedVoice: 'neutral',
-          appliedVoice: aiS.appliedVoice || 'neutral',
+          detectedVoice: execRes.appliedVoice === 'active' ? 'passive' : 'active',
+          appliedVoice: execRes.appliedVoice,
           detectedStructure: 'complex',
-          appliedStructure: aiS.appliedStructure || 'complex',
-          techniques: ['structural_complexity', 'synonym'],
-          wordChanges: [],
-          rulesExplanation: Array.isArray(aiS.rulesExplanation) && aiS.rulesExplanation.length > 0
-            ? aiS.rulesExplanation
-            : [`Abstractive transformation with local ${localConfig.modelName} model`],
+          appliedStructure: execRes.appliedStructure,
+          techniques: execRes.techniques,
+          wordChanges: execRes.wordChanges,
+          rulesExplanation: [
+            `Local ${localConfig.modelName} linguistic rule selection`,
+            ...execRes.rulesExplanation,
+          ],
           isManuallyEdited: false,
           paragraphIndex: actualIdx,
           sentenceIndex: sIdx,
+          isProperSentence: true,
         });
       });
     } else {
       const splitParas = segmentSentences(pData?.paraphrasedText || origP.text);
       splitParas.forEach((sent, sIdx) => {
+        const origText = originalSentences[sIdx] || sent;
+        const analysis = analyzeSentenceForParaphrasing(origText, origP.isHeading);
+
+        if (!analysis.shouldParaphrase) {
+          sentenceDataList.push({
+            id: `local-sent-${actualIdx}-${sIdx}-${++globalSentCounter}`,
+            originalText: origText,
+            paraphrasedText: origText,
+            detectedVoice: 'neutral',
+            appliedVoice: 'neutral',
+            detectedStructure: 'simple',
+            appliedStructure: 'simple',
+            techniques: [],
+            wordChanges: [],
+            rulesExplanation: [`Preserved verbatim: ${analysis.reason}`],
+            isManuallyEdited: false,
+            paragraphIndex: actualIdx,
+            sentenceIndex: sIdx,
+            isProperSentence: false,
+            skippedReason: analysis.reason,
+          });
+          return;
+        }
+
+        const fallbackPlan = generateDeterministicRulePlan(
+          analysis.coreSentenceToParaphrase || origText,
+          config.tone,
+          sIdx,
+          splitParas.length,
+          origP.isHeading
+        );
+        const execRes = executeLinguisticRulePlan(
+          analysis.coreSentenceToParaphrase || origText,
+          fallbackPlan,
+          config.tone,
+          config.preserveTechnicalTerms
+        );
+
+        let paraText = execRes.paraphrasedText;
+        if (analysis.prefixToKeep) {
+          const prefixEscaped = analysis.prefixToKeep.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const prefixRegex = new RegExp(`^${prefixEscaped}\\s*`, 'i');
+          if (!prefixRegex.test(paraText)) {
+            paraText = `${analysis.prefixToKeep} ${paraText}`;
+          }
+        }
+
         sentenceDataList.push({
           id: `local-sent-${actualIdx}-${sIdx}-${++globalSentCounter}`,
-          originalText: originalSentences[sIdx] || '',
-          paraphrasedText: sanitizePunctuationSpacing(sent),
-          detectedVoice: 'neutral',
-          appliedVoice: 'neutral',
+          originalText: origText,
+          paraphrasedText: paraText,
+          detectedVoice: execRes.appliedVoice === 'active' ? 'passive' : 'active',
+          appliedVoice: execRes.appliedVoice,
           detectedStructure: 'complex',
-          appliedStructure: 'complex',
-          techniques: ['structural_complexity'],
-          wordChanges: [],
-          rulesExplanation: [`Abstractive transformation via local ${localConfig.modelName}`],
+          appliedStructure: execRes.appliedStructure,
+          techniques: execRes.techniques,
+          wordChanges: execRes.wordChanges,
+          rulesExplanation: [
+            'Deep deterministic linguistic rule execution',
+            ...execRes.rulesExplanation,
+          ],
           isManuallyEdited: false,
           paragraphIndex: actualIdx,
           sentenceIndex: sIdx,
+          isProperSentence: true,
         });
       });
     }
 
-    const finalParaText = sanitizePunctuationSpacing(
-      pData?.paraphrasedText || sentenceDataList.map((s) => s.paraphrasedText).join(' ')
+    const rawFinalParaText = sanitizePunctuationSpacing(
+      sentenceDataList.map((s) => s.paraphrasedText).join(' ')
     );
+    const linguisticPara = applyLinguisticHumanizationRules(rawFinalParaText, config.tone);
+    const withDomain = restoreDomainTerms(origP.text, linguisticPara.transformedText);
+    const sanitizedPara = sanitizeAiVocabulary(withDomain);
+    const finalParaText = sanitizePunctuationSpacing(sanitizedPara.cleanedText);
 
     resultParagraphs.push({
       id: `p-${actualIdx}`,

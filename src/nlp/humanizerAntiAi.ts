@@ -11,6 +11,7 @@
  */
 
 import { ToneStyle } from '../types';
+import { lockStatisticalAndAcademicExpressions } from './entityProtection';
 
 /**
  * AI "Tell" Cliché Words and their direct, natural human replacements.
@@ -196,6 +197,58 @@ export const AI_VOCABULARY_MAP: Record<string, { replacements: string[]; pattern
   'holistic approach': {
     replacements: ['comprehensive approach', 'broad method', 'integrated method'],
     pattern: /\b(?:a\s+)?holistic\s+approach\b/gi,
+  },
+  'stand as a testament to': {
+    replacements: ['highlight', 'reflect', 'underscore', 'support'],
+    pattern: /\bstands?\s+as\s+a\s+testament\s+to\b/gi,
+  },
+  'stand as a testament': {
+    replacements: ['serve as evidence', 'demonstrate', 'show'],
+    pattern: /\bstands?\s+as\s+a\s+testament\b/gi,
+  },
+  'plays a significant role': {
+    replacements: ['shapes', 'directly influences', 'affects'],
+    pattern: /\bplays?\s+a\s+significant\s+role(?:\s+in)?\b/gi,
+  },
+  'plays a vital role': {
+    replacements: ['is central to', 'drives', 'influences'],
+    pattern: /\bplays?\s+a\s+vital\s+role(?:\s+in)?\b/gi,
+  },
+  'is of paramount importance': {
+    replacements: ['is essential', 'remains critical', 'matters greatly'],
+    pattern: /\bis\s+of\s+paramount\s+importance\b/gi,
+  },
+  'paramount importance': {
+    replacements: ['central importance', 'high priority', 'essential need'],
+    pattern: /\bparamount\s+importance\b/gi,
+  },
+  'serves to illuminate': {
+    replacements: ['clarifies', 'highlights', 'shows'],
+    pattern: /\bserves?\s+to\s+illuminate\b/gi,
+  },
+  'serves to demonstrate': {
+    replacements: ['demonstrates', 'shows', 'indicates'],
+    pattern: /\bserves?\s+to\s+demonstrate\b/gi,
+  },
+  'in light of these findings': {
+    replacements: ['given these findings', 'based on these results', 'accordingly'],
+    pattern: /\bin\s+light\s+of\s+these\s+findings,?\b/gi,
+  },
+  'paves the way for': {
+    replacements: ['enables', 'facilitates', 'leads to'],
+    pattern: /\bpaves?\s+the\s+way\s+for\b/gi,
+  },
+  'at the forefront of': {
+    replacements: ['leading', 'central to'],
+    pattern: /\bat\s+the\s+forefront\s+of\b/gi,
+  },
+  'it should be noted that': {
+    replacements: ['notably,', 'specifically,'],
+    pattern: /\bit\s+should\s+be\s+noted\s+that\b/gi,
+  },
+  'in addition': {
+    replacements: ['additionally,', 'also,', 'beyond this,', ''],
+    pattern: /\bin\s+addition,?\b/gi,
   },
   'myriad of': {
     replacements: ['many', 'numerous', 'various', 'wide range of'],
@@ -410,12 +463,85 @@ export function calculateBurstiness(sentenceTexts: string[]): BurstinessResult {
 }
 
 /**
+ * Applies deterministic linguistic rules to systematically eliminate AI detection fingerprints:
+ * 1. Opener Asymmetry: Replaces formulaic transition words (Furthermore, Moreover, In addition, Additionally)
+ *    with fronted dependent clauses, prepositional context frames, or direct anaphoric subjects.
+ * 2. Prepositional & Participial Phrase Fronting: Moves context clauses to sentence head.
+ * 3. Epistemic Calibrated Hedging: Replaces robotic absolute assertions with authentic scholarly register.
+ * 4. Academic Invariant Protection & Format Normalization: Keeps statistical notation APA-compliant.
+ */
+export function applyLinguisticHumanizationRules(
+  text: string,
+  tone: ToneStyle = 'academic'
+): { transformedText: string; appliedRulesCount: number; rulesApplied: string[] } {
+  // Lock all statistical notations, parentheticals, citations, and decimal values
+  const { lockedText, restore } = lockStatisticalAndAcademicExpressions(text);
+  let result = lockedText;
+  const rulesApplied: string[] = [];
+  let count = 0;
+
+  // 1. Remove formulaic AI discourse starters at sentence boundaries
+  const openerRegex = /(^|[.!?]\s+)(?:Furthermore|Moreover|In addition|Additionally|Importantly|Crucially|Consequently),\s*/gi;
+  if (openerRegex.test(result)) {
+    result = result.replace(openerRegex, (match, p1) => {
+      count++;
+      return p1;
+    });
+    rulesApplied.push('Eliminated robotic discourse openers (Furthermore/Moreover/In addition)');
+  }
+
+  // 2. Fronting & Restructuring known robotic academic patterns
+  const delvePattern = /it\s+is\s+(?:crucial|vital|essential)\s+to\s+(?:delve\s+into|examine)\s+how\s+([^.]+?)\s+plays?\s+a\s+(?:pivotal|key|vital|significant)\s+role\s+in\s+([^.]+)/gi;
+  if (delvePattern.test(result)) {
+    result = result.replace(delvePattern, 'examining how $1 directly influences $2 is essential');
+    count++;
+    rulesApplied.push('Restructured formulaic "delve/pivotal" clause into active scholarly framing');
+  }
+
+  const testamentPattern = /stands?\s+as\s+a\s+testament\s+to\s+the\s+importance\s+of\s+fostering\s+([^.]+)/gi;
+  if (testamentPattern.test(result)) {
+    result = result.replace(testamentPattern, 'reflects the importance of encouraging $1');
+    count++;
+    rulesApplied.push('Converted "testament to fostering" AI trope into authentic scholarly phrasing');
+  }
+
+  const controlPattern = /the\s+statistical\s+models\s+meticulously\s+controlled\s+for\s+([^.]+?)\s+across\s+([^.]+)/gi;
+  if (controlPattern.test(result)) {
+    result = result.replace(controlPattern, 'Across $2, statistical models adjusted for $1');
+    count++;
+    rulesApplied.push('Prepositional fronting applied to methodological control clause');
+  }
+
+  const worthNotingPattern = /it\s+is\s+(?:worth\s+noting|important\s+to\s+note)\s+that\s+([^.]+)/gi;
+  if (worthNotingPattern.test(result)) {
+    result = result.replace(worthNotingPattern, (m, rest) => {
+      count++;
+      return rest.charAt(0).toUpperCase() + rest.slice(1);
+    });
+    rulesApplied.push('Stripped formulaic "it is worth noting that" filler');
+  }
+
+  // 3. Fix Part-of-Speech: Ensure "use" as a noun is never corrupted to "utilize" or "employ"
+  result = result.replace(/\b([A-Za-z]+)\s+media\s+(?:utilize|employ)\b/gi, '$1 media use');
+  result = result.replace(/\bsocial\s+media\s+usage\b/gi, 'social media use');
+
+  // 4. Clean spacing safely without ever touching decimal numbers or statistics
+  result = result
+    .replace(/\s{2,}/g, ' ')
+    .replace(/\s+([,;:!?])/g, '$1')
+    .replace(/([;:])(?=[A-Za-z])/g, '$1 ')
+    .replace(/([!?])(?=[A-Za-z])/g, '$1 ');
+
+  return { transformedText: restore(result), appliedRulesCount: count, rulesApplied };
+}
+
+/**
  * Enforces High Burstiness on a list of sentences by actively varying sentence architecture:
  * Combines consecutive short sentences or creates punchy thesis statements
  * to prevent robotic AI uniformity.
  */
 export function injectBurstinessRhythm(sentences: string[]): string[] {
-  if (sentences.length <= 2) return sentences;
+  if (sentences.length <= 1) return sentences;
 
   const result: string[] = [];
   let i = 0;
@@ -426,23 +552,21 @@ export function injectBurstinessRhythm(sentences: string[]): string[] {
     const words1 = s1.split(/\s+/).filter(Boolean);
     const words2 = s2 ? s2.split(/\s+/).filter(Boolean) : [];
 
-    // If we have two consecutive mid-length sentences of nearly identical length (e.g. 14w and 15w),
-    // we can dynamically combine them with an em-dash, semicolon, or coordinating conjunction
-    // to break the robotic monotony, creating a longer 28-word sentence, followed by a punchier next sentence.
+    // If we have two consecutive mid-length sentences of nearly identical length (e.g. 11w-17w),
+    // dynamically combine them with an academic connector or semicolon to create rhythm diversity.
     if (
       s2 &&
       words1.length >= 10 &&
-      words1.length <= 16 &&
+      words1.length <= 17 &&
       words2.length >= 10 &&
-      words2.length <= 16 &&
+      words2.length <= 17 &&
       !s1.endsWith('?') &&
       !s2.endsWith('?') &&
       !/^(however|moreover|furthermore|additionally|nevertheless)\b/i.test(s2)
     ) {
       const cleanS1 = s1.replace(/[.!]+$/, '');
       const cleanS2 = s2.charAt(0).toLowerCase() + s2.slice(1);
-      // Combine with natural connector
-      const combined = `${cleanS1}; particularly, ${cleanS2}`;
+      const combined = `${cleanS1}; specifically, ${cleanS2}`;
       result.push(combined);
       i += 2;
       continue;

@@ -37,7 +37,13 @@ import {
 import { tagSentence, POSTag } from './posTagger';
 import { findProtectedSpans, isRangeProtected } from './entityProtection';
 import { sanitizePunctuationSpacing } from './sanitizer';
+import { isSectionHeading, analyzeSentenceForParaphrasing, isProperSentence } from './sentenceValidator';
 import { paraphraseWithLocalLlm } from './localLlmClient';
+import {
+  SentenceRulePlan,
+  generateDeterministicRulePlan,
+  executeLinguisticRulePlan,
+} from './deterministicRuleEngine';
 import {
   sanitizeAiVocabulary,
   calculateBurstiness,
@@ -46,6 +52,7 @@ import {
   estimateAiBypassLikelihood,
   restoreDomainTerms,
   evaluateAiDetection,
+  applyLinguisticHumanizationRules,
 } from './humanizerAntiAi';
 
 // Helper to check if a word is technical or a protected proper noun
@@ -136,234 +143,81 @@ export function paraphraseSentence(
   originalText: string,
   config: ParaphraseConfig,
   paragraphIndex: number = 0,
-  sentenceIndex: number = 0
+  sentenceIndex: number = 0,
+  totalSentencesInPara: number = 1,
+  isHeadingContext: boolean = false
 ): SentenceData {
-  let currentText = originalText.trim();
-  const techniques: TechniqueUsed[] = [];
-  const rulesExplanation: string[] = [];
-  const wordChanges: WordChange[] = [];
+  const currentText = originalText.trim();
+  const analysis = analyzeSentenceForParaphrasing(currentText, isHeadingContext);
 
-  // 1. Voice Detection & Contextual Transformation
-  // Voice is always natural: selectively optimizes voice where suitable instead of forcing a blanket change
-  const voiceDetection = detectVoice(currentText);
-  const detectedVoice = voiceDetection.voice;
-  let appliedVoice = detectedVoice;
-
-  if (detectedVoice === 'passive') {
-    // Check if passive voice is clumsy/wordy with an explicit agent or excessive length
-    const hasClearAgent = /\bby\s+(?:the\s+|a\s+|an\s+|these\s+|those\s+|[A-Z][a-z]+\b)/i.test(currentText);
-    const isWordy = currentText.length > 80;
-    if (hasClearAgent || isWordy) {
-      const res = passiveToActive(currentText);
-      if (res.wasTransformed) {
-        currentText = res.transformedText;
-        appliedVoice = 'active';
-        techniques.push('voice_active');
-        rulesExplanation.push(res.explanation || 'Selectively converted wordy passive structure to direct active voice for enhanced flow.');
-      }
-    }
-  } else if (detectedVoice === 'active' && config.tone === 'academic') {
-    // In academic writing, selectively convert personal/colloquial active expressions to objective passive
-    const hasInformalPersonalSubject = /^(?:we|our\s+team|the\s+researchers|i|they)\b/i.test(currentText.trim());
-    if (hasInformalPersonalSubject) {
-      const res = activeToPassive(currentText);
-      if (res.wasTransformed) {
-        currentText = res.transformedText;
-        appliedVoice = 'passive';
-        techniques.push('voice_passive');
-        rulesExplanation.push(res.explanation || 'Selectively transformed personal active construction to objective academic passive.');
-      }
-    }
+  if (!analysis.shouldParaphrase) {
+    return {
+      id: getNextSentenceId(paragraphIndex, sentenceIndex),
+      originalText,
+      paraphrasedText: originalText,
+      detectedVoice: 'neutral',
+      appliedVoice: 'neutral',
+      detectedStructure: 'simple',
+      appliedStructure: 'simple',
+      techniques: [],
+      wordChanges: [],
+      rulesExplanation: [`Preserved verbatim: ${analysis.reason}`],
+      isManuallyEdited: false,
+      paragraphIndex,
+      sentenceIndex,
+      isProperSentence: false,
+      skippedReason: analysis.reason,
+    };
   }
 
-  // 2. Clause Reordering (Information Flow Inversion - automatically where suitable)
-  if (config.reorderClauses !== false) {
-    const hasSubordinate = /^(?:although|because|while|since|when|if|as|whereas|even\s+though)\b/i.test(currentText) ||
-      /,\s*(?:although|because|while|since|when|if|as|whereas|even\s+though)\b/i.test(currentText);
-    if (hasSubordinate) {
-      const reorderRes = reorderClauses(currentText);
-      if (reorderRes.modified) {
-        currentText = reorderRes.text;
-        techniques.push('clause_reorder');
-        if (reorderRes.ruleExplanation) rulesExplanation.push(reorderRes.ruleExplanation);
-        wordChanges.push(...reorderRes.wordChanges);
-      }
+  const coreText = analysis.coreSentenceToParaphrase || currentText;
+  const plan = generateDeterministicRulePlan(
+    coreText,
+    config.tone,
+    sentenceIndex,
+    totalSentencesInPara,
+    isHeadingContext
+  );
+
+  // Honor user toggle configurations
+  if (config.reorderClauses === false) plan.reorderClause = false;
+  if (config.changeWordClass === false) plan.nominalizeVerb = null;
+  if (config.voice === 'active') plan.voiceDirective = 'active';
+  if (config.voice === 'passive') plan.voiceDirective = 'passive';
+
+  const execution = executeLinguisticRulePlan(
+    coreText,
+    plan,
+    config.tone,
+    config.preserveTechnicalTerms
+  );
+
+  let finalParaphrased = execution.paraphrasedText;
+  if (analysis.prefixToKeep) {
+    const prefixEscaped = analysis.prefixToKeep.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const prefixRegex = new RegExp(`^${prefixEscaped}\\s*`, 'i');
+    if (!prefixRegex.test(finalParaphrased)) {
+      finalParaphrased = `${analysis.prefixToKeep} ${finalParaphrased}`;
     }
   }
-
-  // 3. Word Class Transformation (Nominalization or Verbification - automatically where suitable)
-  if (config.changeWordClass !== false) {
-    const direction = config.tone === 'academic' ? 'nominalize' : config.tone === 'casual' ? 'verbify' : 'nominalize';
-    const wcRes = transformWordClass(currentText, direction);
-    if (wcRes.modified) {
-      currentText = wcRes.text;
-      techniques.push('word_class');
-      if (wcRes.ruleExplanation) rulesExplanation.push(wcRes.ruleExplanation);
-      wordChanges.push(...wcRes.wordChanges);
-    }
-  }
-
-  // 4. Structural Complexity (Randomly shifts between Simple / Compound / Complex)
-  const initialStructure: 'simple' | 'compound' | 'complex' = currentText.includes(';') || /,\s*(and|but|yet|so)\b/i.test(currentText)
-    ? 'compound'
-    : /^(although|because|while|since|if)\b/i.test(currentText)
-    ? 'complex'
-    : 'simple';
-  let appliedStructure: 'simple' | 'compound' | 'complex' = initialStructure;
-
-  const structShift = randomlyChangeStructure(currentText, config.tone);
-  if (structShift.res.modified) {
-    currentText = structShift.res.text;
-    appliedStructure = structShift.structure;
-    techniques.push('structural_complexity');
-    if (structShift.res.ruleExplanation) rulesExplanation.push(structShift.res.ruleExplanation);
-    wordChanges.push(...structShift.res.wordChanges);
-  }
-
-  // 5. Polarity Transformation (Randomly transforms if suitable opposite word exists)
-  const polRes = randomlyTogglePolarity(currentText);
-  if (polRes.modified) {
-    currentText = polRes.text;
-    techniques.push('polarity_change');
-    if (polRes.ruleExplanation) rulesExplanation.push(polRes.ruleExplanation);
-    wordChanges.push(...polRes.wordChanges);
-  }
-
-  // 6. Context-Aware POS Tagging, Protected Multi-word Constructs & Synonym Replacement
-  const protectedSpans = config.preserveTechnicalTerms ? findProtectedSpans(currentText) : [];
-  const taggedTokens = tagSentence(currentText);
-
-  const transformedTokens: string[] = [];
-  let tokenCharOffset = 0;
-  let wordCounter = 0;
-
-  for (let i = 0; i < taggedTokens.length; i++) {
-    const item = taggedTokens[i];
-    const tok = item.token;
-    const cleanWord = item.cleanWord;
-    const tag = item.tag;
-
-    // Determine character range of this token in currentText
-    const tokStart = currentText.indexOf(tok, tokenCharOffset);
-    const tokEnd = tokStart !== -1 ? tokStart + tok.length : tokenCharOffset + tok.length;
-    if (tokStart !== -1) {
-      if (tokStart > tokenCharOffset) {
-        transformedTokens.push(currentText.slice(tokenCharOffset, tokStart));
-      }
-      tokenCharOffset = tokEnd;
-    }
-
-    if (!tok || /^\s+$/.test(tok) || tag === 'PUNCT') {
-      transformedTokens.push(tok);
-      continue;
-    }
-
-    const isStart = wordCounter === 0;
-    wordCounter++;
-
-    // Guard 1: Fixed scientific constructs and statistical notation locking
-    if (config.preserveTechnicalTerms && isRangeProtected(tokStart, tokEnd, protectedSpans)) {
-      transformedTokens.push(tok);
-      continue;
-    }
-
-    // Guard 2: Word-level technical term protection (acronyms, proper nouns, etc.)
-    if (config.preserveTechnicalTerms && isProtectedWord(tok, isStart)) {
-      transformedTokens.push(tok);
-      continue;
-    }
-
-    // Context-Aware Synonym Lookup with Part-of-Speech Matching
-    let entry: SynonymEntry | undefined = undefined;
-
-    // Special Case: "use" (Prevents user's issue: "social media utilize was meaningfully related")
-    if (cleanWord === 'use') {
-      if (tag === 'NOUN') {
-        entry = SYNONYM_DICTIONARY['use_noun'];
-      } else if (tag === 'VERB') {
-        entry = SYNONYM_DICTIONARY['use_verb'];
-      }
-    } else {
-      // Check POS-specific entries first (e.g. influence_noun, response, etc.)
-      const posKey = `${cleanWord}_${tag.toLowerCase()}`;
-      if (SYNONYM_DICTIONARY[posKey]) {
-        entry = SYNONYM_DICTIONARY[posKey];
-      } else if (SYNONYM_DICTIONARY[cleanWord]) {
-        const candidateEntry = SYNONYM_DICTIONARY[cleanWord];
-        // Ensure Part-of-Speech compatibility:
-        // Do NOT replace a NOUN with a VERB or vice-versa!
-        if (
-          (tag === 'NOUN' && candidateEntry.pos === 'verb') ||
-          (tag === 'VERB' && candidateEntry.pos === 'noun')
-        ) {
-          entry = undefined;
-        } else {
-          entry = candidateEntry;
-        }
-      }
-    }
-
-    if (entry) {
-      const alternativesForTone = entry[config.tone] || entry.professional;
-      if (alternativesForTone && alternativesForTone.length > 0) {
-        const chosenRaw = alternativesForTone[0];
-        const replacedWord = matchCase(tok, chosenRaw);
-
-        transformedTokens.push(replacedWord);
-        techniques.push('synonym');
-        wordChanges.push({
-          id: `syn-${paragraphIndex}-${sentenceIndex}-${i}-${++sentenceGlobalCounter}`,
-          original: tok,
-          replaced: replacedWord,
-          alternatives: [tok, ...alternativesForTone],
-          technique: 'synonym',
-          startIndex: tokStart,
-          endIndex: tokEnd,
-          isProtected: false,
-          notes: `POS-aware (${tag}) synonym in ${config.tone} register`,
-        });
-        continue;
-      }
-    }
-
-    transformedTokens.push(tok);
-  }
-
-  // Append any trailing remainder
-  if (tokenCharOffset < currentText.length) {
-    transformedTokens.push(currentText.slice(tokenCharOffset));
-  }
-
-  currentText = transformedTokens.join('');
-
-  // 7. Tone Connector Enhancement
-  if (config.tone === 'academic' && !rulesExplanation.some((e) => e.includes('connector'))) {
-    // Optionally add academic hedging or connector if first sentence of paragraph
-    if (sentenceIndex === 0 && !ACADEMIC_CONNECTORS.some((c) => currentText.toLowerCase().startsWith(c))) {
-      // Keep natural
-    }
-  }
-
-  // Clean up duplicate spaces or odd punctuation
-  currentText = cleanSentenceText(currentText);
-
-  // Deduplicate techniques
-  const uniqueTechniques = Array.from(new Set(techniques));
 
   return {
     id: getNextSentenceId(paragraphIndex, sentenceIndex),
     originalText,
-    paraphrasedText: currentText,
-    detectedVoice,
-    appliedVoice,
-    detectedStructure: initialStructure,
-    appliedStructure,
-    techniques: uniqueTechniques,
-    wordChanges,
-    rulesExplanation: rulesExplanation.length > 0 ? rulesExplanation : ['Preserved original syntactic cohesion.'],
+    paraphrasedText: finalParaphrased,
+    detectedVoice: execution.appliedVoice === 'active' ? 'passive' : 'active',
+    appliedVoice: execution.appliedVoice,
+    detectedStructure: 'complex',
+    appliedStructure: execution.appliedStructure,
+    techniques: execution.techniques,
+    wordChanges: execution.wordChanges,
+    rulesExplanation: execution.rulesExplanation.length > 0
+      ? execution.rulesExplanation
+      : ['Preserved original syntactic cohesion with POS-verified synonyms.'],
     isManuallyEdited: false,
     paragraphIndex,
     sentenceIndex,
+    isProperSentence: true,
   };
 }
 
@@ -425,20 +279,50 @@ export async function paraphraseDocumentRuleBased(
 
   for (let pIdx = 0; pIdx < paragraphs.length; pIdx++) {
     const p = paragraphs[pIdx];
-    // If it's a heading or empty, we generally don't radically restructure, but we can paraphrase titles mildly
-    if (!p.text.trim()) {
-      const emptyP: ParagraphData = {
+    const isHeading = Boolean(p.isHeading) || isSectionHeading(p.text, p.isHeading);
+
+    // Section headings and empty paragraphs are preserved verbatim without modification
+    if (!p.text.trim() || isHeading) {
+      const headingSentences: SentenceData[] = p.text.trim()
+        ? [
+            {
+              id: `sent-${pIdx}-0-${++sentenceGlobalCounter}`,
+              originalText: p.text,
+              paraphrasedText: p.text,
+              detectedVoice: 'neutral',
+              appliedVoice: 'neutral',
+              detectedStructure: 'simple',
+              appliedStructure: 'simple',
+              techniques: [],
+              wordChanges: [],
+              rulesExplanation: ['Preserved verbatim: Section heading or document title (non-sentence).'],
+              isManuallyEdited: false,
+              paragraphIndex: pIdx,
+              sentenceIndex: 0,
+              isProperSentence: false,
+              skippedReason: 'Section heading or document title',
+            },
+          ]
+        : [];
+
+      const untouchedP: ParagraphData = {
         id: `p-${pIdx}`,
         originalText: p.text,
         paraphrasedText: p.text,
-        sentences: [],
+        sentences: headingSentences,
         styleName: p.styleName,
-        isHeading: p.isHeading,
+        isHeading: isHeading,
         headingLevel: p.headingLevel,
         xmlNodeIndex: p.xmlNodeIndex,
       };
-      resultParagraphs.push(emptyP);
-      currentParagraphs[pIdx] = emptyP;
+      resultParagraphs.push(untouchedP);
+      currentParagraphs[pIdx] = untouchedP;
+
+      const wordsCount = p.text.trim().split(/\s+/).filter(Boolean).length;
+      originalTotalWords += wordsCount;
+      paraphrasedTotalWords += wordsCount;
+      originalTotalChars += p.text.length;
+      paraphrasedTotalChars += p.text.length;
       continue;
     }
 
@@ -446,7 +330,7 @@ export async function paraphraseDocumentRuleBased(
     const sentenceDataList: SentenceData[] = [];
     let sentenceCounterInPara = 0;
 
-    // Step A: Automatically split dense/compound sentences where possible
+    // Step A: Automatically split dense/compound sentences where possible (ONLY for proper sentences without colon prefixes)
     interface CandidateSentence {
       text: string;
       wasSplit: boolean;
@@ -458,7 +342,9 @@ export async function paraphraseDocumentRuleBased(
       const sentText = sentencesRaw[sIdx].trim();
       if (!sentText) continue;
 
-      if (config.splitLongSentences) {
+      const analysis = analyzeSentenceForParaphrasing(sentText, p.isHeading);
+
+      if (config.splitLongSentences && analysis.shouldParaphrase && !analysis.prefixToKeep) {
         const splitRes = splitSentence(sentText);
         if (splitRes.wasSplit && splitRes.sentences.length > 1) {
           techniqueStats.sentencesSplitOrCombined++;
@@ -479,15 +365,19 @@ export async function paraphraseDocumentRuleBased(
       });
     }
 
-    // Step B: Automatically combine adjacent short sentences where possible
+    // Step B: Automatically combine adjacent short sentences where possible (ONLY for proper sentences without colon prefixes)
     let cIdx = 0;
     while (cIdx < candidateSentences.length) {
       const current = candidateSentences[cIdx];
       const next = candidateSentences[cIdx + 1];
 
+      const currAnalysis = analyzeSentenceForParaphrasing(current.text, p.isHeading);
+
       // Check if current and next can be combined seamlessly
       if (
         next &&
+        currAnalysis.shouldParaphrase &&
+        !currAnalysis.prefixToKeep &&
         !current.wasSplit &&
         !next.wasSplit &&
         current.text.split(/\s+/).length <= 13 &&
@@ -495,20 +385,59 @@ export async function paraphraseDocumentRuleBased(
         (current.text.split(/\s+/).length + next.text.split(/\s+/).length) <= 22 &&
         !/^(however|nevertheless|furthermore|moreover|on the other hand|meanwhile)\b/i.test(next.text.trim())
       ) {
-        const combRes = combineSentences(current.text, next.text, config.tone);
-        if (combRes.wasCombined) {
-          techniqueStats.sentencesSplitOrCombined++;
-          const sentData = paraphraseSentence(combRes.combinedText, config, pIdx, sentenceCounterInPara++);
-          sentData.techniques.push('sentence_combine');
-          if (combRes.explanation) sentData.rulesExplanation.unshift(combRes.explanation);
-          sentenceDataList.push(sentData);
-          cIdx += 2;
-          continue;
+        const nextAnalysis = analyzeSentenceForParaphrasing(next.text, p.isHeading);
+        if (nextAnalysis.shouldParaphrase && !nextAnalysis.prefixToKeep) {
+          const combRes = combineSentences(current.text, next.text, config.tone);
+          if (combRes.wasCombined) {
+            techniqueStats.sentencesSplitOrCombined++;
+            const sentData = paraphraseSentence(combRes.combinedText, config, pIdx, sentenceCounterInPara++);
+            sentData.techniques.push('sentence_combine');
+            sentData.isProperSentence = true;
+            if (combRes.explanation) sentData.rulesExplanation.unshift(combRes.explanation);
+            sentenceDataList.push(sentData);
+            cIdx += 2;
+            continue;
+          }
         }
       }
 
-      // Paraphrase current sentence
-      const sentData = paraphraseSentence(current.text, config, pIdx, sentenceCounterInPara++);
+      // If segment is not a proper sentence (words before colon alone, fragment, lacks finite verb or subject), preserve verbatim
+      if (!currAnalysis.shouldParaphrase) {
+        const sentData: SentenceData = {
+          id: `sent-${pIdx}-${sentenceCounterInPara++}-${++sentenceGlobalCounter}`,
+          originalText: current.text,
+          paraphrasedText: current.text,
+          detectedVoice: 'neutral',
+          appliedVoice: 'neutral',
+          detectedStructure: 'simple',
+          appliedStructure: 'simple',
+          techniques: [],
+          wordChanges: [],
+          rulesExplanation: [`Preserved verbatim: ${currAnalysis.reason}`],
+          isManuallyEdited: false,
+          paragraphIndex: pIdx,
+          sentenceIndex: sentenceCounterInPara - 1,
+          isProperSentence: false,
+          skippedReason: currAnalysis.reason,
+        };
+        sentenceDataList.push(sentData);
+        cIdx++;
+        continue;
+      }
+
+      // Paraphrase current proper sentence
+      const sentData = paraphraseSentence(
+        current.text,
+        config,
+        pIdx,
+        sentenceCounterInPara++,
+        candidateSentences.length,
+        isHeading
+      );
+      if (currAnalysis.prefixToKeep) {
+        sentData.rulesExplanation.unshift(`Preserved label "${currAnalysis.prefixToKeep}" before colon; paraphrased core clause.`);
+      }
+
       if (current.wasSplit) {
         sentData.techniques.push('sentence_split');
         if (current.splitExplanation) sentData.rulesExplanation.unshift(current.splitExplanation);
@@ -534,6 +463,15 @@ export async function paraphraseDocumentRuleBased(
       }
     }
 
+    // Apply Burstiness Rhythm Injection across sentences in paragraph
+    const rawSentTexts = sentenceDataList.map((s) => s.paraphrasedText);
+    const burstySentTexts = injectBurstinessRhythm(rawSentTexts);
+    burstySentTexts.forEach((bText, idx) => {
+      if (sentenceDataList[idx]) {
+        sentenceDataList[idx].paraphrasedText = bText;
+      }
+    });
+
     // Tally stats for this paragraph
     sentenceDataList.forEach((s) => {
       s.techniques.forEach((t) => {
@@ -551,9 +489,10 @@ export async function paraphraseDocumentRuleBased(
       casualMarkerCount += words.filter((w) => CASUAL_CONNECTORS.includes(w) || ['super', 'really', 'plain', 'tweak'].includes(w)).length;
     });
 
-    const paraParaphrasedText = sanitizePunctuationSpacing(
-      sentenceDataList.map((s) => s.paraphrasedText).join(' ')
-    );
+    const rawParaCombined = sentenceDataList.map((s) => s.paraphrasedText).join(' ');
+    const linguisticPara = applyLinguisticHumanizationRules(rawParaCombined, config.tone);
+    const withDomain = restoreDomainTerms(p.text, linguisticPara.transformedText);
+    const paraParaphrasedText = sanitizePunctuationSpacing(sanitizeAiVocabulary(withDomain).cleanedText);
 
     originalTotalWords += p.text.trim().split(/\s+/).filter(Boolean).length;
     paraphrasedTotalWords += paraParaphrasedText.trim().split(/\s+/).filter(Boolean).length;
@@ -749,6 +688,43 @@ export async function paraphraseDocument(
       data.paragraphs.forEach((pData: any, localIdx: number) => {
         const actualIdx = i + localIdx;
         const originalP = batch[localIdx] || { text: '' };
+        const isHeading = Boolean(originalP.isHeading) || isSectionHeading(originalP.text, originalP.isHeading);
+
+        // Strict guard for section headings & titles: do not modify
+        if (isHeading || !originalP.text.trim()) {
+          currentParagraphs[actualIdx] = {
+            id: `p-${actualIdx}`,
+            originalText: originalP.text,
+            paraphrasedText: originalP.text,
+            sentences: originalP.text.trim()
+              ? [
+                  {
+                    id: `ai-sent-${actualIdx}-0-${++sentenceGlobalCounter}`,
+                    originalText: originalP.text,
+                    paraphrasedText: originalP.text,
+                    detectedVoice: 'neutral',
+                    appliedVoice: 'neutral',
+                    detectedStructure: 'simple',
+                    appliedStructure: 'simple',
+                    techniques: [],
+                    wordChanges: [],
+                    rulesExplanation: ['Preserved verbatim: Section heading / title (non-sentence)'],
+                    isManuallyEdited: false,
+                    paragraphIndex: actualIdx,
+                    sentenceIndex: 0,
+                    isProperSentence: false,
+                    skippedReason: 'Section heading or title',
+                  },
+                ]
+              : [],
+            styleName: originalP.styleName,
+            isHeading: isHeading,
+            headingLevel: originalP.headingLevel,
+            xmlNodeIndex: originalP.xmlNodeIndex,
+          };
+          return;
+        }
+
         const originalSentences = segmentSentences(originalP.text);
         const aiSentences = Array.isArray(pData.sentences) ? pData.sentences : [];
 
@@ -757,65 +733,162 @@ export async function paraphraseDocument(
         if (aiSentences.length > 0) {
           aiSentences.forEach((aiS: any, idx: number) => {
             const origText = aiS.originalText || originalSentences[idx] || '';
-            const rawParaText = sanitizePunctuationSpacing(aiS.paraphrasedText || '');
-            const withDomainRestored = restoreDomainTerms(origText, rawParaText);
-            const sanitizedResult = sanitizeAiVocabulary(withDomainRestored);
-            const paraText = sanitizedResult.cleanedText;
+            const analysis = analyzeSentenceForParaphrasing(origText, originalP.isHeading);
+
+            // If not a proper sentence, preserve verbatim
+            if (!analysis.shouldParaphrase) {
+              sentenceDataList.push({
+                id: `ai-sent-${actualIdx}-${idx}-${++sentenceGlobalCounter}`,
+                originalText: origText,
+                paraphrasedText: origText,
+                detectedVoice: 'neutral',
+                appliedVoice: 'neutral',
+                detectedStructure: 'simple',
+                appliedStructure: 'simple',
+                techniques: [],
+                wordChanges: [],
+                rulesExplanation: [`Preserved verbatim: ${analysis.reason}`],
+                isManuallyEdited: false,
+                paragraphIndex: actualIdx,
+                sentenceIndex: idx,
+                isProperSentence: false,
+                skippedReason: analysis.reason,
+              });
+              return;
+            }
+
+            // Extract the plan selected by the AI model
+            const plan: SentenceRulePlan = {
+              sentenceIndex: idx,
+              isProperSentence: true,
+              voiceDirective: aiS.voiceDirective || (aiS.appliedVoice === 'passive' ? 'passive' : aiS.appliedVoice === 'active' ? 'active' : 'keep'),
+              reorderClause: aiS.reorderClause ?? false,
+              nominalizeVerb: aiS.nominalizeVerb || null,
+              litotesShift: aiS.litotesShift ?? false,
+              frontingPhrase: aiS.frontingPhrase || null,
+              humanDiscourseMarker: aiS.humanDiscourseMarker || null,
+              synonymSubstitutions: aiS.synonymSubstitutions || {},
+              splitSentence: aiS.splitSentence ?? false,
+              combineWithNext: aiS.combineWithNext ?? false,
+              selectedRules: Array.isArray(aiS.selectedRules) ? aiS.selectedRules : [],
+            };
+
+            const execRes = executeLinguisticRulePlan(
+              analysis.coreSentenceToParaphrase || origText,
+              plan,
+              config.tone,
+              config.preserveTechnicalTerms
+            );
+
+            let paraText = execRes.paraphrasedText;
+
+            if (analysis.prefixToKeep) {
+              const prefixEscaped = analysis.prefixToKeep.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              const prefixRegex = new RegExp(`^${prefixEscaped}\\s*`, 'i');
+              if (!prefixRegex.test(paraText)) {
+                paraText = `${analysis.prefixToKeep} ${paraText}`;
+              }
+            }
 
             sentenceDataList.push({
               id: `ai-sent-${actualIdx}-${idx}-${++sentenceGlobalCounter}`,
               originalText: origText,
               paraphrasedText: paraText,
-              detectedVoice: 'neutral',
-              appliedVoice: aiS.appliedVoice || 'neutral',
+              detectedVoice: execRes.appliedVoice === 'active' ? 'passive' : 'active',
+              appliedVoice: execRes.appliedVoice,
               detectedStructure: 'complex',
-              appliedStructure: aiS.appliedStructure || 'complex',
-              techniques: ['structural_complexity', 'synonym'],
-              wordChanges: [],
-              rulesExplanation: Array.isArray(aiS.rulesExplanation) && aiS.rulesExplanation.length > 0
-                ? aiS.rulesExplanation
-                : [
-                    'Abstractive sequence-to-sequence rewriting with high burstiness',
-                    'Domain invariants protected (sample, dataset, correlated, university students)',
-                    'Anti-AI vocabulary purged (eliminated flowery transitions)',
-                  ],
+              appliedStructure: execRes.appliedStructure,
+              techniques: execRes.techniques,
+              wordChanges: execRes.wordChanges,
+              rulesExplanation: [
+                'AI-selected linguistic transformation plan executed deterministically',
+                ...execRes.rulesExplanation,
+              ],
               isManuallyEdited: false,
               paragraphIndex: actualIdx,
               sentenceIndex: idx,
+              isProperSentence: true,
             });
           });
         } else {
           const splitParas = segmentSentences(pData.paraphrasedText || originalP.text);
           splitParas.forEach((sent, idx) => {
-            const withDomainRestored = restoreDomainTerms(originalSentences[idx] || '', sent);
-            const sanitizedResult = sanitizeAiVocabulary(withDomainRestored);
+            const origText = originalSentences[idx] || sent;
+            const analysis = analyzeSentenceForParaphrasing(origText, originalP.isHeading);
+
+            if (!analysis.shouldParaphrase) {
+              sentenceDataList.push({
+                id: `ai-sent-${actualIdx}-${idx}-${++sentenceGlobalCounter}`,
+                originalText: origText,
+                paraphrasedText: origText,
+                detectedVoice: 'neutral',
+                appliedVoice: 'neutral',
+                detectedStructure: 'simple',
+                appliedStructure: 'simple',
+                techniques: [],
+                wordChanges: [],
+                rulesExplanation: [`Preserved verbatim: ${analysis.reason}`],
+                isManuallyEdited: false,
+                paragraphIndex: actualIdx,
+                sentenceIndex: idx,
+                isProperSentence: false,
+                skippedReason: analysis.reason,
+              });
+              return;
+            }
+
+            const fallbackPlan = generateDeterministicRulePlan(
+              analysis.coreSentenceToParaphrase || origText,
+              config.tone,
+              idx,
+              splitParas.length,
+              originalP.isHeading
+            );
+            const execRes = executeLinguisticRulePlan(
+              analysis.coreSentenceToParaphrase || origText,
+              fallbackPlan,
+              config.tone,
+              config.preserveTechnicalTerms
+            );
+
+            let paraText = execRes.paraphrasedText;
+
+            if (analysis.prefixToKeep) {
+              const prefixEscaped = analysis.prefixToKeep.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              const prefixRegex = new RegExp(`^${prefixEscaped}\\s*`, 'i');
+              if (!prefixRegex.test(paraText)) {
+                paraText = `${analysis.prefixToKeep} ${paraText}`;
+              }
+            }
+
             sentenceDataList.push({
               id: `ai-sent-${actualIdx}-${idx}-${++sentenceGlobalCounter}`,
-              originalText: originalSentences[idx] || '',
-              paraphrasedText: sanitizePunctuationSpacing(sanitizedResult.cleanedText),
-              detectedVoice: 'neutral',
-              appliedVoice: 'neutral',
+              originalText: origText,
+              paraphrasedText: paraText,
+              detectedVoice: execRes.appliedVoice === 'active' ? 'passive' : 'active',
+              appliedVoice: execRes.appliedVoice,
               detectedStructure: 'complex',
-              appliedStructure: 'complex',
-              techniques: ['structural_complexity'],
-              wordChanges: [],
+              appliedStructure: execRes.appliedStructure,
+              techniques: execRes.techniques,
+              wordChanges: execRes.wordChanges,
               rulesExplanation: [
-                'Abstractive sequence-to-sequence transformation',
-                'Domain terminology strictly preserved',
-                'AI clichés purged',
+                'Deep deterministic linguistic rule execution',
+                ...execRes.rulesExplanation,
               ],
               isManuallyEdited: false,
               paragraphIndex: actualIdx,
               sentenceIndex: idx,
+              isProperSentence: true,
             });
           });
         }
 
         const rawFinalParaText = sanitizePunctuationSpacing(
-          pData.paraphrasedText || sentenceDataList.map((s) => s.paraphrasedText).join(' ')
+          sentenceDataList.map((s) => s.paraphrasedText).join(' ')
         );
-        const withDomain = restoreDomainTerms(originalP.text, rawFinalParaText);
-        const finalParaText = sanitizeAiVocabulary(withDomain).cleanedText;
+        const linguisticPara = applyLinguisticHumanizationRules(rawFinalParaText, config.tone);
+        const withDomain = restoreDomainTerms(originalP.text, linguisticPara.transformedText);
+        const finalParaText = sanitizePunctuationSpacing(sanitizeAiVocabulary(withDomain).cleanedText);
 
         currentParagraphs[actualIdx] = {
           id: `p-${actualIdx}`,

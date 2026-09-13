@@ -7,6 +7,7 @@
 import JSZip from 'jszip';
 import { ParagraphData } from '../types';
 import { sanitizePunctuationSpacing } from '../nlp/sanitizer';
+import { isSectionHeading } from '../nlp/sentenceValidator';
 
 export interface ExtractedParagraph {
   text: string;
@@ -80,6 +81,11 @@ export async function parseDocx(file: File | Blob, fileName: string): Promise<Do
       } else if (/title|heading/i.test(styleVal)) {
         isHeading = true;
       }
+    }
+
+    // Also check linguistic patterns for section titles (e.g. "1. Introduction", "Abstract", "Methodology")
+    if (!isHeading && isSectionHeading(fullText)) {
+      isHeading = true;
     }
 
     extractedParagraphs.push({
@@ -177,21 +183,31 @@ export async function createSampleDocx(sampleType: 'academic' | 'business' | 'ca
     fileName = 'AI_Draft_Social_Media_Research.docx';
     title = 'Impact of Social Media Usage on Well-Being in University Students';
     contentParagraphs = [
+      '1. Introduction',
       'In this empirical investigation, a representative sample of 380 university students completed a structured survey measure. The dataset was analyzed using multiple regression models to examine psychological outcomes. The primary results demonstrate that frequent social media use was significantly correlated with reduced self-esteem (r = -0.34, p < .01). Furthermore, it is crucial to delve into how peer comparison plays a pivotal role in shaping daily affective experiences.',
+      'Table 1: Participant Demographics and Baseline Characteristics',
+      'Data collection and preprocessing.',
+      'Note: A representative sample of 380 university students completed a structured survey measure. Demographic indicators were recorded during the initial intake phase.',
       'The statistical models meticulously controlled for baseline demographic indicators and academic load across participants. In addition, these quantitative findings stand as a testament to the importance of fostering mindful digital consumption. It is worth noting that future longitudinal research should continue to explore how specific algorithmic feeds influence cognitive fatigue over time.',
     ];
   } else if (sampleType === 'business') {
     fileName = 'AI_Draft_Executive_Proposal.docx';
     title = 'Strategic Proposal for Enterprise Workflow Modernization';
     contentParagraphs = [
+      'Executive Summary:',
       'A comprehensive audit was performed across legacy enterprise applications to identify persistent operational bottlenecks. Furthermore, it is crucial to navigate the dynamic landscape of cloud infrastructure to maintain a competitive market posture. The engineering leadership team meticulously reviewed the initial metrics, which underscored the paramount importance of automation.',
+      'Section 2. Key Initiatives',
+      'Quarterly infrastructure milestones.',
+      'Note: Operational efficiency increased by 28% following the implementation of continuous integration pipelines.',
       'In addition, this strategic overhaul stands as a testament to fostering cross-functional efficiency across distributed teams. We must leverage modern integration patterns to spearhead innovation and streamline delivery pipelines.',
     ];
   } else {
     fileName = 'AI_Draft_Team_Announcement.docx';
     title = 'Weekly Product Sprint and Architecture Sync';
     contentParagraphs = [
+      'Sprint Overview:',
       'Our development squad completed the core platform redesign during the previous weekly sprint cycle. Furthermore, it is crucial to delve into the user feedback metrics to verify that navigation remains seamless. We are embarking on a fresh series of usability tests to ensure high performance before the upcoming production rollout.',
+      'Release 4.2 roadmap and deliverables.',
     ];
   }
 

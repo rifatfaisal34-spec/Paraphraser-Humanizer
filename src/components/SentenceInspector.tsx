@@ -171,18 +171,46 @@ export const SentenceInspector: React.FC<SentenceInspectorProps> = ({
 
         {/* Current Voice & Structure badges */}
         <div className="flex items-center space-x-2 text-xs">
-          <span
-            className={`px-2 py-0.5 rounded text-[10px] font-medium ${
-              sentence.appliedVoice === 'passive'
-                ? 'bg-amber-100 text-amber-800'
-                : 'bg-blue-100 text-blue-800'
-            }`}
-          >
-            {sentence.appliedVoice === 'passive' ? 'Passive Voice' : 'Active Voice'}
-          </span>
-          <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-800 capitalize">
-            {sentence.appliedStructure} Structure
-          </span>
+          {sentence.isProperSentence === false ? (
+            <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-200 text-slate-700 border border-slate-300">
+              Preserved Verbatim ({sentence.skippedReason || 'Non-sentence structure'})
+            </span>
+          ) : (
+            <>
+              <span
+                className={`px-2 py-0.5 rounded text-[10px] font-medium ${
+                  sentence.appliedVoice === 'passive'
+                    ? 'bg-amber-100 text-amber-800'
+                    : 'bg-blue-100 text-blue-800'
+                }`}
+              >
+                {sentence.appliedVoice === 'passive' ? 'Passive Voice' : 'Active Voice'}
+              </span>
+              <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-800 capitalize">
+                {sentence.appliedStructure} Structure
+              </span>
+              {sentence.techniques?.includes('nominalization') && (
+                <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-800">
+                  Nominalization
+                </span>
+              )}
+              {sentence.techniques?.includes('litotes') && (
+                <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-rose-100 text-rose-800">
+                  Litotes Shift
+                </span>
+              )}
+              {sentence.techniques?.includes('fronting_topicalization') && (
+                <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-indigo-100 text-indigo-800">
+                  Topicalization Frame
+                </span>
+              )}
+              {sentence.techniques?.includes('human_discourse_marker') && (
+                <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-teal-100 text-teal-800">
+                  Human Connector
+                </span>
+              )}
+            </>
+          )}
         </div>
       </div>
 
@@ -257,85 +285,95 @@ export const SentenceInspector: React.FC<SentenceInspectorProps> = ({
         </div>
       )}
 
-      {/* 1-Click Granular Transformation Bar */}
-      <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center gap-2 text-xs">
-        <span className="text-slate-500 font-medium text-[11px]">1-Click Actions:</span>
-
-        {/* 1-Click Voice Switcher */}
-        <button
-          onClick={handleToggleVoice}
-          className="inline-flex items-center px-2 py-1 rounded bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 font-medium transition-colors text-[11px]"
-          title="Switch between Active and Passive voice"
-        >
-          <Volume2 className="w-3 h-3 mr-1" />
-          Switch Voice ({sentence.appliedVoice === 'passive' ? '→ Active' : '→ Passive'})
-        </button>
-
-        {/* 1-Click Polarity Inversion */}
-        <button
-          onClick={handleTogglePolarity}
-          className="inline-flex items-center px-2 py-1 rounded bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-medium transition-colors text-[11px]"
-          title="Switch statement between Affirmative and Negative litotes"
-        >
-          <ArrowRightLeft className="w-3 h-3 mr-1" />
-          Flip Polarity
-        </button>
-
-        {/* 1-Click Clause Inversion */}
-        <button
-          onClick={handleReorderClause}
-          className="inline-flex items-center px-2 py-1 rounded bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 font-medium transition-colors text-[11px]"
-          title="Invert subordinate and main clause arrangements"
-        >
-          <ArrowRightLeft className="w-3 h-3 mr-1" />
-          Invert Clauses
-        </button>
-
-        {/* 1-Click Word Class (Nominalization) */}
-        <button
-          onClick={handleToggleWordClass}
-          className="inline-flex items-center px-2 py-1 rounded bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 font-medium transition-colors text-[11px]"
-          title="Shift verb to noun form (e.g. analyze -> conduct an analysis of)"
-        >
-          <Layers className="w-3 h-3 mr-1" />
-          Nominalize
-        </button>
-
-        {/* 1-Click Split Sentence */}
-        <button
-          onClick={handleSplit}
-          className="inline-flex items-center px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 font-medium transition-colors text-[11px]"
-          title="Split sentence at conjunction or semicolon"
-        >
-          <Scissors className="w-3 h-3 mr-1" />
-          Split Sentence
-        </button>
-
-        {/* Structure Selector Mini-pills */}
-        <div className="inline-flex rounded bg-slate-100 p-0.5 border border-slate-200 text-[10px]">
-          {(['simple', 'compound', 'complex'] as ('simple' | 'compound' | 'complex')[]).map((st) => (
-            <button
-              key={st}
-              onClick={() => handleSelectStructure(st)}
-              className={`px-1.5 py-0.5 rounded capitalize ${
-                sentence.appliedStructure === st ? 'bg-emerald-600 text-white font-bold' : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              {st}
-            </button>
-          ))}
+      {/* 1-Click Granular Transformation Bar or Non-Sentence Notice */}
+      {sentence.isProperSentence === false ? (
+        <div className="pt-2 border-t border-slate-100 flex items-start space-x-2 text-xs text-slate-600 bg-slate-50 p-2.5 rounded-md border border-slate-200/70">
+          <Info className="w-4 h-4 text-indigo-500 shrink-0 mt-0.5" />
+          <div className="text-[12px] leading-relaxed">
+            <span className="font-semibold text-slate-800">Preserved as-is:</span>{' '}
+            This segment is classified as {sentence.skippedReason ? `"${sentence.skippedReason}"` : 'a non-sentence'}. Section headings, table labels, words before colons, and fragments without a complete subject-verb clause are automatically protected from alteration to ensure document correctness.
+          </div>
         </div>
+      ) : (
+        <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center gap-2 text-xs">
+          <span className="text-slate-500 font-medium text-[11px]">1-Click Actions:</span>
 
-        {/* Revert Button */}
-        <button
-          onClick={handleRevert}
-          className="inline-flex items-center px-2 py-1 rounded text-slate-500 hover:text-slate-800 hover:bg-slate-100 text-[11px] ml-auto transition-colors"
-          title="Revert sentence to original wording"
-        >
-          <RotateCcw className="w-3 h-3 mr-1" />
-          Reset
-        </button>
-      </div>
+          {/* 1-Click Voice Switcher */}
+          <button
+            onClick={handleToggleVoice}
+            className="inline-flex items-center px-2 py-1 rounded bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 font-medium transition-colors text-[11px]"
+            title="Switch between Active and Passive voice"
+          >
+            <Volume2 className="w-3 h-3 mr-1" />
+            Switch Voice ({sentence.appliedVoice === 'passive' ? '→ Active' : '→ Passive'})
+          </button>
+
+          {/* 1-Click Polarity Inversion */}
+          <button
+            onClick={handleTogglePolarity}
+            className="inline-flex items-center px-2 py-1 rounded bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-medium transition-colors text-[11px]"
+            title="Switch statement between Affirmative and Negative litotes"
+          >
+            <ArrowRightLeft className="w-3 h-3 mr-1" />
+            Flip Polarity
+          </button>
+
+          {/* 1-Click Clause Inversion */}
+          <button
+            onClick={handleReorderClause}
+            className="inline-flex items-center px-2 py-1 rounded bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 font-medium transition-colors text-[11px]"
+            title="Invert subordinate and main clause arrangements"
+          >
+            <ArrowRightLeft className="w-3 h-3 mr-1" />
+            Invert Clauses
+          </button>
+
+          {/* 1-Click Word Class (Nominalization) */}
+          <button
+            onClick={handleToggleWordClass}
+            className="inline-flex items-center px-2 py-1 rounded bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 font-medium transition-colors text-[11px]"
+            title="Shift verb to noun form (e.g. analyze -> conduct an analysis of)"
+          >
+            <Layers className="w-3 h-3 mr-1" />
+            Nominalize
+          </button>
+
+          {/* 1-Click Split Sentence */}
+          <button
+            onClick={handleSplit}
+            className="inline-flex items-center px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 font-medium transition-colors text-[11px]"
+            title="Split sentence at conjunction or semicolon"
+          >
+            <Scissors className="w-3 h-3 mr-1" />
+            Split Sentence
+          </button>
+
+          {/* Structure Selector Mini-pills */}
+          <div className="inline-flex rounded bg-slate-100 p-0.5 border border-slate-200 text-[10px]">
+            {(['simple', 'compound', 'complex'] as ('simple' | 'compound' | 'complex')[]).map((st) => (
+              <button
+                key={st}
+                onClick={() => handleSelectStructure(st)}
+                className={`px-1.5 py-0.5 rounded capitalize ${
+                  sentence.appliedStructure === st ? 'bg-emerald-600 text-white font-bold' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {st}
+              </button>
+            ))}
+          </div>
+
+          {/* Revert Button */}
+          <button
+            onClick={handleRevert}
+            className="inline-flex items-center px-2 py-1 rounded text-slate-500 hover:text-slate-800 hover:bg-slate-100 text-[11px] ml-auto transition-colors"
+            title="Revert sentence to original wording"
+          >
+            <RotateCcw className="w-3 h-3 mr-1" />
+            Reset
+          </button>
+        </div>
+      )}
 
       {/* Applied Linguistics Rule Explanations */}
       {sentence.rulesExplanation.length > 0 && (

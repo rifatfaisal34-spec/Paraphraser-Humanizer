@@ -51,61 +51,96 @@ export function reorderClauses(sentence: string): TransformResult {
   const clean = sentence.trim().replace(/[.!?]+$/, '');
   const wordChanges: WordChange[] = [];
 
+  // Guard: Never reorder if there are colons, semicolons, quotes, or unmatched parentheses
+  if (clean.includes(':') || clean.includes(';') || clean.includes('"') || clean.includes('“')) {
+    return { text: sentence, modified: false, wordChanges: [] };
+  }
+  const openParens = (clean.match(/\(/g) || []).length;
+  const closeParens = (clean.match(/\)/g) || []).length;
+  if (openParens !== closeParens) {
+    return { text: sentence, modified: false, wordChanges: [] };
+  }
+
   // Pattern A: Subordinating conjunction at start: "[SubConj] [ClauseA], [ClauseB]"
-  for (const conj of SUBORDINATING_CONJUNCTIONS) {
+  for (const conj of ['Because', 'Although', 'Even though', 'While', 'Whereas']) {
     const startRegex = new RegExp(`^${conj}\\s+([^,]+),\\s*(.+)$`, 'i');
     const match = clean.match(startRegex);
     if (match) {
       const clauseA = match[1].trim();
       const clauseB = match[2].trim();
 
-      const newSentence = `${capitalize(clauseB)} ${conj} ${uncapitalize(clauseA)}${endingPunct}`;
-      return {
-        text: newSentence,
-        modified: true,
-        ruleExplanation: `Inverted clause order: shifted subordinate clause "${conj} ${clauseA}" to the end after main clause "${clauseB}".`,
-        wordChanges: [
-          {
-            id: getNextUniqueId('reorder'),
-            original: clean,
-            replaced: newSentence,
-            alternatives: [sentence],
-            technique: 'clause_reorder',
-            startIndex: 0,
-            endIndex: newSentence.length,
-            notes: `Subordinate clause inversion using "${conj}"`,
-          },
-        ],
-      };
+      // Ensure both clauses have substantive length (>= 4 words)
+      if (clauseA.split(/\s+/).length >= 4 && clauseB.split(/\s+/).length >= 4) {
+        const newSentence = `${capitalize(clauseB)} ${conj.toLowerCase()} ${uncapitalize(clauseA)}${endingPunct}`;
+        const sanitized = sanitizePunctuationSpacing(newSentence);
+        return {
+          text: sanitized,
+          modified: true,
+          ruleExplanation: `Inverted clause order: shifted subordinate clause "${conj.toLowerCase()} ${clauseA}" to the end after main clause "${clauseB}".`,
+          wordChanges: [
+            {
+              id: getNextUniqueId('reorder'),
+              original: clean,
+              replaced: sanitized,
+              alternatives: [sentence],
+              technique: 'clause_reorder',
+              startIndex: 0,
+              endIndex: sanitized.length,
+              notes: `Subordinate clause inversion using "${conj}"`,
+            },
+          ],
+        };
+      }
     }
+  }
 
-    // Pattern B: Subordinating conjunction in middle: "[ClauseB] [conj] [ClauseA]"
+  // Pattern B: Subordinating conjunction in middle: "[ClauseB] [conj] [ClauseA]"
+  for (const conj of ['because', 'although', 'even though', 'while', 'whereas']) {
     const middleRegex = new RegExp(`^(.+?)\\s*,?\\s+\\b${conj}\\b\\s+(.+)$`, 'i');
     const midMatch = clean.match(middleRegex);
     if (midMatch) {
       const clauseB = midMatch[1].trim();
       const clauseA = midMatch[2].trim();
 
-      // Ensure clauseB isn't tiny
-      if (clauseB.split(' ').length >= 3 && clauseA.split(' ').length >= 3) {
-        const newSentence = `${capitalize(conj)} ${uncapitalize(clauseA)}, ${uncapitalize(clauseB)}${endingPunct}`;
-        return {
-          text: newSentence,
-          modified: true,
-          ruleExplanation: `Fronted subordinate clause: moved "${conj} ${clauseA}" to the beginning of the sentence for stylistic emphasis.`,
-          wordChanges: [
-            {
-              id: getNextUniqueId('reorder'),
-              original: clean,
-              replaced: newSentence,
-              alternatives: [sentence],
-              technique: 'clause_reorder',
-              startIndex: 0,
-              endIndex: newSentence.length,
-              notes: `Fronted subordinate clause with "${conj}"`,
-            },
-          ],
-        };
+      // Guard against "because of"
+      if (conj === 'because' && /^of\b/i.test(clauseA)) {
+        continue;
+      }
+
+      // Guard: clauseB should not end with comparative or scoping adverbs/prepositions
+      if (/\b(?:such|just|simply|partly|largely|primarily|as)\s*$/i.test(clauseB)) {
+        continue;
+      }
+
+      // Ensure both clauses are valid (>= 4 words each)
+      const bWords = clauseB.split(/\s+/);
+      const aWords = clauseA.split(/\s+/);
+      if (bWords.length >= 4 && aWords.length >= 4) {
+        // Check for presence of finite verb or modal in both clauses
+        const hasVerbInA = /\b(?:is|are|was|were|can|could|may|might|will|would|should|have|has|had|do|does|did|show|shows|showed|indicate|indicates|compare|compares|compared|use|uses|used|find|finds|found|lead|leads|led|affect|affects|affected|correlate|correlates)\b|[a-z]+ed\b|[a-z]+s\b/i.test(clauseA);
+        const hasVerbInB = /\b(?:is|are|was|were|can|could|may|might|will|would|should|have|has|had|do|does|did|show|shows|showed|indicate|indicates|compare|compares|compared|use|uses|used|find|finds|found|lead|leads|led|affect|affects|affected|correlate|correlates)\b|[a-z]+ed\b|[a-z]+s\b/i.test(clauseB);
+
+        if (hasVerbInA && hasVerbInB) {
+          const newSentence = `${capitalize(conj)} ${uncapitalize(clauseA)}, ${uncapitalize(clauseB)}${endingPunct}`;
+          const sanitized = sanitizePunctuationSpacing(newSentence);
+          return {
+            text: sanitized,
+            modified: true,
+            ruleExplanation: `Fronted subordinate clause: moved "${conj} ${clauseA}" to the beginning of the sentence for syntactic variety.`,
+            wordChanges: [
+              {
+                id: getNextUniqueId('reorder'),
+                original: clean,
+                replaced: sanitized,
+                alternatives: [sentence],
+                technique: 'clause_reorder',
+                startIndex: 0,
+                endIndex: sanitized.length,
+                notes: `Fronted subordinate clause with "${conj}"`,
+              },
+            ],
+          };
+        }
       }
     }
   }

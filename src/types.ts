@@ -15,7 +15,10 @@ export type TechniqueUsed =
   | 'sentence_split'
   | 'sentence_combine'
   | 'polarity_change'
-  | 'structural_complexity';
+  | 'structural_complexity'
+  | 'fronting_topicalization'
+  | 'human_discourse_marker'
+  | 'litotes';
 
 export interface WordAlternative {
   word: string;
@@ -49,6 +52,8 @@ export interface SentenceData {
   isManuallyEdited: boolean;
   paragraphIndex: number;
   sentenceIndex: number;
+  isProperSentence?: boolean;
+  skippedReason?: string;
 }
 
 export interface ParagraphData {
@@ -141,7 +146,7 @@ export const DEFAULT_CONFIG: ParaphraseConfig = {
   polarity: 'preserve',
   splitLongSentences: false,
   combineShortSentences: true,
-  reorderClauses: true,
+  reorderClauses: false,
   changeWordClass: true,
   preserveTechnicalTerms: true,
   enforceBurstiness: true,

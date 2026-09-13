@@ -156,16 +156,16 @@ export const SYNONYM_DICTIONARY: Record<string, SynonymEntry> = {
   finding: {
     lemma: 'finding',
     pos: 'noun',
-    professional: ['result', 'outcome', 'conclusion', 'observation'],
+    professional: ['result', 'outcome', 'finding'],
     casual: ['takeaway', 'result'],
-    academic: ['empirical observation', 'result', 'outcome', 'deduction'],
+    academic: ['result', 'outcome', 'finding'],
   },
   findings: {
     lemma: 'findings',
     pos: 'noun',
-    professional: ['results', 'outcomes', 'conclusions', 'observations'],
+    professional: ['results', 'outcomes', 'findings'],
     casual: ['results', 'takeaways'],
-    academic: ['empirical outcomes', 'results', 'observations', 'conclusions'],
+    academic: ['results', 'outcomes', 'findings'],
   },
   dataset: {
     lemma: 'dataset',

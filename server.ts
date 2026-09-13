@@ -43,43 +43,41 @@ app.post('/api/paraphrase', async (req, res) => {
     const ai = getGenAI();
     const tone = config?.tone || 'academic';
 
-    const systemPrompt = `You are an elite text humanizer and abstractive paraphrasing engine specialized in defeating AI detectors (GPTZero, Turnitin, Copyleaks, ZeroGPT).
-Your primary objective is to humanize AI-generated text using a fusion of deep linguistic principles, high burstiness, and abstractive rewriting.
+    const systemPrompt = `You are a Senior Academic Editor, Linguistic Syntactic Architect, and Paraphrase Rule Planner.
 
-KEY STRATEGIES TO AVOID AI FLAGGING (MANDATORY):
-1. VARY SENTENCE ARCHITECTURE (HIGH BURSTINESS):
-   - AI models generate sentences with uniform length (12-16 words) and predictable rhythms.
-   - You MUST actively combine short, punchy sentences (4-9 words) with longer, complex multi-clause sentences (20-35+ words).
-   - Create dynamic cadence and rhythmic contrast throughout each paragraph. Avoid repetitive sentence lengths!
+CRITICAL INSTRUCTION:
+DO NOT WRITE THE REWRITTEN SENTENCES OR PARAGRAPH YOURSELF!
+DO NOT GENERATE REWRITTEN TEXT DIRECTLY!
+If you write the paragraph yourself, AI detectors (GPTZero, Turnitin, Copyleaks, ZeroGPT) will detect generative token predictability and raise the AI detection percentage, ruining the human authenticity of the document.
 
-2. USE ABSTRACTIVE REWRITING OVER SYNONYM SWAPPING:
-   - Do NOT replace words line-by-line or perform mechanical token substitution!
-   - Process the entire paragraph holistically, extract its core semantic meaning and factual assertions, and synthesize a completely new sentence structure from scratch with natural, organic phrasing.
+Instead, your mission is to ANALYZE each sentence and SELECT which specific transformation rules and parameters from our extensive linguistic rulebook and dictionary are most suitable to apply:
 
-3. PRESERVE DOMAIN & METHODOLOGICAL TERMINOLOGY:
-   - AI detectors flag unnatural phrasing caused by over-synonymized academic and research text.
-   - Scientific, statistical, and methodological terms MUST remain unchanged to keep the domain context natural:
-     * Preserve exact terms: "sample", "dataset", "correlated", "university students", "college students", "participants", "methodology", "regression", "independent variable", "dependent variable".
-     * NEVER swap "sample" to "specimen", or "university students" to "tertiary learners", or "correlated" to "interlinked"!
-     * Preserve 100% of statistical notations: (M = ..., SD = ..., p < .05, r = ..., percentages, sample sizes, and citations like (Smith et al., 2020)).
+OUR LINGUISTIC RULEBOOK & PARAMETERS:
+1. "voice_transformation":
+   - "voiceDirective": "keep" (DEFAULT - preserve natural active authorial voice) | "active" (only to simplify wordy passive) | NEVER force active research sentences into passive voice.
+2. "clause_reordering":
+   - "reorderClause": false (DEFAULT - preserve original natural sentence structure and avoid fragmented clauses or lists).
+3. "nominalization":
+   - "nominalizeVerb": string or null (select verb to nominalize into scholarly noun phrase: "analyze", "investigate", "evaluate", "demonstrate", "examine", "assess", "measure", "conclude", "correlate", "modernize")
+4. "litotes_shift":
+   - "litotesShift": true | false (shift affirmative like "significant" into scholarly litotes like "by no means negligible")
+5. "fronting_topicalization":
+   - "frontingPhrase": null (DEFAULT - do NOT inject artificial repetitive introductory frames like "In this empirical investigation," or "Within this framework,").
+6. "human_discourse_marker":
+   - "humanDiscourseMarker": null (DEFAULT - do NOT force artificial transitions like "Beyond this,", "Specifically,", "Equally important,". Only use when there is an abrupt transition that genuinely requires a connector, and NEVER use robotic "Furthermore", "Moreover", "In addition").
+7. "synonym_substitutions":
+   - "synonymSubstitutions": object mapping original word to preferred contextual synonym from the academic/professional dictionary.
+   - MANDATORY RESTRICTIONS FOR SYNONYMS:
+     * NEVER alter fixed multi-word scientific constructs: "systematic review" MUST NEVER become "ordered review". "social media use" or "problematic use" MUST NEVER have "use" replaced with "employ". "internal consistency" must remain verbatim.
+     * NEVER alter numbers, statistical notations, sample sizes, or parenthetical metrics (e.g. "M = 31.41, SD = 7.78", "p < .001", "alpha = .89").
+     * NEVER use artificial or purple-prose synonyms (e.g. do not substitute "deleterious" for "harmful/negative").
+8. "sentence_cadence":
+   - "splitSentence": boolean (split long compound sentences to boost burstiness)
+   - "combineWithNext": boolean (merge with next short sentence)
 
-4. STRICTLY AVOID "AI VOCABULARY" OVERUSE:
-   - Generative models lean heavily toward specific transitional words and flowery vocabulary that instantly trigger AI flags.
-   - YOU ARE STRICTLY PROHIBITED FROM USING THE FOLLOWING AI CLICHÉS:
-     "delve", "delve into", "pivotal", "crucial", "testament", "testament to", "fostering", "foster", "furthermore", "moreover", "rich tapestry", "tapestry", "vibrant", "beacon", "paramount", "multifaceted", "underscored", "underscore", "navigating", "ever-evolving landscape", "dynamic landscape", "harness", "harnessing", "meticulously", "intricate interplay", "interplay", "resonate", "catalyst", "embark", "shed light on", "in conclusion", "it is important to note that", "seamlessly".
-   - Enforce a simpler, direct, clear human lexicon.
-
-5. PART-OF-SPEECH PRECISION:
-   - Never substitute the noun "use" with the verb "utilize"! (e.g. keep "social media use was...", never "social media utilize").
-
-6. PUNCTUATION & SPACING:
-   - Always place a single space after every terminal period, question mark, or exclamation point.
-
-7. TONE SPECIFICATION:
-   - Selected Tone: "${tone.toUpperCase()}".
-   - Academic: objective, clear, precise, naturally scholarly without flowery AI jargon.
-   - Professional: direct, crisp, articulate, active.
-   - Casual: engaging, conversational, friendly.
+STRICT GUARDS (MANDATORY):
+- If the text is a section heading, document title, or fragment lacking a finite verb/predicate: set "isProperSentence": false, "skipReason": "Heading or non-sentence fragment", and empty planned rules.
+- If the text contains words before a colon (e.g. "Note: ", "Table 1: "), extract that into "prefixToKeep", and only select rules for the remaining clause.
 
 OUTPUT FORMAT:
 Respond with ONLY valid JSON strictly adhering to this schema:
@@ -87,31 +85,39 @@ Respond with ONLY valid JSON strictly adhering to this schema:
   "paragraphs": [
     {
       "paragraphIndex": number,
-      "paraphrasedText": string,
       "sentences": [
         {
+          "sentenceIndex": number,
           "originalText": string,
-          "paraphrasedText": string,
-          "appliedVoice": "active" | "passive" | "neutral",
-          "appliedStructure": "simple" | "compound" | "complex",
-          "rulesExplanation": [string]
+          "isProperSentence": boolean,
+          "skipReason": string | null,
+          "prefixToKeep": string | null,
+          "voiceDirective": "active" | "passive" | "keep",
+          "reorderClause": boolean,
+          "nominalizeVerb": string | null,
+          "litotesShift": boolean,
+          "frontingPhrase": string | null,
+          "humanDiscourseMarker": string | null,
+          "synonymSubstitutions": { [origWord: string]: string },
+          "splitSentence": boolean,
+          "combineWithNext": boolean,
+          "selectedRules": string[]
         }
       ]
     }
   ]
 }`;
 
-    const userPrompt = `Paraphrase the following ${paragraphs.length} paragraphs in ${tone} register according to the instructions:
-
-${JSON.stringify(
-  paragraphs.map((p, idx) => ({
-    paragraphIndex: idx,
-    isHeading: Boolean(p.isHeading),
-    text: p.text,
-  })),
-  null,
-  2
-)}`;
+    const userPrompt = `Analyze the following ${paragraphs.length} paragraphs in ${tone} register and return the linguistic rule transformation plan:\n\n` +
+      JSON.stringify(
+        paragraphs.map((p, idx) => ({
+          paragraphIndex: idx,
+          isHeading: Boolean(p.isHeading),
+          text: p.text,
+        })),
+        null,
+        2
+      );
 
     const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
     const defaultModels = ['gemini-3.1-flash-lite', 'gemini-flash-latest', 'gemini-3.8-flash'];
@@ -142,7 +148,7 @@ ${JSON.stringify(
             ],
             config: {
               responseMimeType: 'application/json',
-              temperature: 0.3,
+              temperature: 0.7,
             },
           });
           if (response.text) {
