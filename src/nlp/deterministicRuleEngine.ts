@@ -17,6 +17,7 @@ import {
   FRONTING_FRAMES,
   HUMAN_DISCOURSE_CONNECTORS,
   BANNED_AI_EXPRESSIONS,
+  ACADEMIC_PHRASAL_TRANSFORMS,
 } from './deepLinguisticDictionary';
 import { tagSentence, POSTag } from './posTagger';
 import {
@@ -31,7 +32,7 @@ import { isSectionHeading, analyzeSentenceForParaphrasing } from './sentenceVali
 import { detectVoice, activeToPassive, passiveToActive } from './voiceTransformer';
 import { reorderClauses } from './structureTransformer';
 import { sanitizePunctuationSpacing } from './sanitizer';
-import { restoreDomainTerms, sanitizeAiVocabulary } from './humanizerAntiAi';
+import { restoreDomainTerms, sanitizeAiVocabulary, applyLinguisticHumanizationRules } from './humanizerAntiAi';
 
 export interface SentenceRulePlan {
   sentenceIndex: number;
@@ -105,7 +106,8 @@ export function generateDeterministicRulePlan(
   tone: ToneStyle,
   sentenceIndex: number,
   totalSentencesInPara: number,
-  isHeadingContext: boolean = false
+  isHeadingContext: boolean = false,
+  intensity: 'radical' | 'balanced' | 'conservative' = 'radical'
 ): SentenceRulePlan {
   const analysis = analyzeSentenceForParaphrasing(sentenceText, isHeadingContext);
 
@@ -125,29 +127,30 @@ export function generateDeterministicRulePlan(
   const plannedRules: TechniqueUsed[] = [];
   const voice = detectVoice(coreText);
 
-  // 1. Voice Directive: Keep natural authorial voice, disable automated active-to-passive conversion
-  const voiceDirective: 'active' | 'passive' | 'keep' = 'keep';
+  // 1. Voice Directive: Respect active/passive balance
+  let voiceDirective: 'active' | 'passive' | 'keep' = 'keep';
 
-  // 2. Clause Reordering: Safe fronting or inversion of subordinate clauses (e.g. "because", "although")
+  // 2. Clause Reordering: Safe fronting or inversion of subordinate clauses
   // Breaks identical sentence length and word order footprints safely without corrupting syntax
   let reorderClause = false;
   if (!coreText.includes(':') && !coreText.includes(';')) {
-    const hasSafeSubConj = /\b(because|although|even though|while|whereas)\b/i.test(coreText);
+    const hasSafeSubConj = /\b(because|although|even though|while|whereas|since|inasmuch as|given that)\b/i.test(coreText);
     if (hasSafeSubConj && !/\bbecause\s+of\b/i.test(coreText)) {
-      reorderClause = wordCount >= 8;
+      const minWordCount = intensity === 'radical' ? 7 : 8;
+      reorderClause = wordCount >= minWordCount;
       if (reorderClause) {
         plannedRules.push('clause_reorder');
       }
     }
   }
 
-  // 3. Nominalization: Only applied selectively on long sentences; excludes clear verbs like examine/evaluate
+  // 3. Nominalization: Word class shifts (Verbal predicate -> Scholarly nominal construct)
   let nominalizeVerb: string | undefined = undefined;
-  if (wordCount >= 14 && sentenceIndex % 3 === 0) {
+  const canNominalize = intensity === 'radical' ? wordCount >= 8 : (wordCount >= 12 && sentenceIndex % 2 === 0);
+  if (canNominalize) {
     for (const [key, entry] of Object.entries(DEEP_NOMINALIZATIONS)) {
-      if (key === 'examine' || key === 'evaluate' || key === 'assess') continue;
       const hasVerb = new RegExp(`\\b(?:${entry.pastVerb}|${entry.thirdVerb}|${entry.baseVerb})\\b`, 'i').test(coreText);
-      const isPassive = new RegExp(`\\b(was|were|is|are|been)\\s+${entry.pastVerb}\\b`, 'i').test(coreText);
+      const isPassive = new RegExp(`\\b(was|were|is|are|been|being|be)\\s+${entry.pastVerb}\\b`, 'i').test(coreText);
       if (hasVerb && !isPassive) {
         nominalizeVerb = key;
         plannedRules.push('word_class');
@@ -158,11 +161,11 @@ export function generateDeterministicRulePlan(
 
   // 4. Litotes Shift (Affirmative -> Negative Litotes for scholarly variance)
   let litotesShift = false;
-  if (tone === 'academic' && sentenceIndex % 2 === 1) {
+  if (tone === 'academic') {
     const hasLitotesTarget = EXTENSIVE_LITOTES_PAIRS.some((pair) =>
       new RegExp(`\\b${pair.affirmative}\\b`, 'i').test(coreText)
     );
-    if (hasLitotesTarget) {
+    if (hasLitotesTarget && (intensity === 'radical' || sentenceIndex % 2 === 1)) {
       litotesShift = true;
       plannedRules.push('polarity_change');
     }
@@ -192,6 +195,63 @@ export function generateDeterministicRulePlan(
 }
 
 /**
+ * Adjusts candidate verb inflections (base, 3rd-person singular, or past tense)
+ * to maintain strict grammatical subject-verb agreement with the original predicate.
+ */
+function inflectVerbCollocation(matchedText: string, replacementText: string): string {
+  const matchWords = matchedText.trim().split(/\s+/);
+  const repWords = replacementText.trim().split(/\s+/);
+  if (matchWords.length === 0 || repWords.length === 0) return replacementText;
+
+  const firstMatch = matchWords[0].toLowerCase();
+  const firstRep = repWords[0];
+  const firstRepLower = firstRep.toLowerCase();
+
+  const isMatchPast = /(?:ed|d)$/.test(firstMatch) && !/^(?:and|need|lead)$/.test(firstMatch);
+  const isMatch3rdSingular = /s$/.test(firstMatch) && !/ss$/.test(firstMatch);
+  const isMatchBase = !isMatchPast && !isMatch3rdSingular;
+
+  let newFirstRep = firstRep;
+
+  if (isMatchBase) {
+    if (firstRepLower === 'provides') newFirstRep = 'provide';
+    else if (firstRepLower === 'illuminates') newFirstRep = 'illuminate';
+    else if (firstRepLower === 'offers') newFirstRep = 'offer';
+    else if (firstRepLower === 'underscores') newFirstRep = 'underscore';
+    else if (firstRepLower === 'highlights') newFirstRep = 'highlight';
+    else if (firstRepLower === 'serves') newFirstRep = 'serve';
+    else if (firstRepLower === 'exerts') newFirstRep = 'exert';
+    else if (firstRepLower === 'fosters') newFirstRep = 'foster';
+    else if (firstRepLower === 'substantiates') newFirstRep = 'substantiate';
+    else if (firstRepLower === 'demonstrates') newFirstRep = 'demonstrate';
+    else if (firstRepLower === 'reveals') newFirstRep = 'reveal';
+  } else if (isMatch3rdSingular) {
+    if (firstRepLower === 'provide') newFirstRep = 'provides';
+    else if (firstRepLower === 'illuminate') newFirstRep = 'illuminates';
+    else if (firstRepLower === 'offer') newFirstRep = 'offers';
+    else if (firstRepLower === 'underscore') newFirstRep = 'underscores';
+    else if (firstRepLower === 'highlight') newFirstRep = 'highlights';
+    else if (firstRepLower === 'serve') newFirstRep = 'serves';
+    else if (firstRepLower === 'exert') newFirstRep = 'exerts';
+    else if (firstRepLower === 'foster') newFirstRep = 'fosters';
+    else if (firstRepLower === 'substantiate') newFirstRep = 'substantiates';
+    else if (firstRepLower === 'demonstrate') newFirstRep = 'demonstrates';
+    else if (firstRepLower === 'reveal') newFirstRep = 'reveals';
+  } else if (isMatchPast) {
+    if (firstRepLower === 'provide' || firstRepLower === 'provides') newFirstRep = 'provided';
+    else if (firstRepLower === 'illuminate' || firstRepLower === 'illuminates') newFirstRep = 'illuminated';
+    else if (firstRepLower === 'offer' || firstRepLower === 'offers') newFirstRep = 'offered';
+    else if (firstRepLower === 'underscore' || firstRepLower === 'underscores') newFirstRep = 'underscored';
+    else if (firstRepLower === 'highlight' || firstRepLower === 'highlights') newFirstRep = 'highlighted';
+    else if (firstRepLower === 'serve' || firstRepLower === 'serves') newFirstRep = 'served';
+    else if (firstRepLower === 'exert' || firstRepLower === 'exerts') newFirstRep = 'exerted';
+  }
+
+  repWords[0] = matchCase(firstRep, newFirstRep);
+  return repWords.join(' ');
+}
+
+/**
  * Executes a SentenceRulePlan deterministically on a sentence.
  * Strictly guarantees that no LLM writes the text directly.
  */
@@ -199,7 +259,8 @@ export function executeLinguisticRulePlan(
   rawSentenceText: string,
   plan: SentenceRulePlan,
   tone: ToneStyle,
-  preserveTechnicalTerms: boolean = true
+  preserveTechnicalTerms: boolean = true,
+  intensity: 'radical' | 'balanced' | 'conservative' = 'radical'
 ): RuleExecutionResult {
   // If not a proper sentence (heading, fragment, table label), return untouched
   if (!plan.isProperSentence) {
@@ -232,9 +293,39 @@ export function executeLinguisticRulePlan(
     rulesExplanation.push(`Purged robotic AI expressions: ${replacedList.join(', ')}`);
   }
 
-  // 3. Apply Voice Transformation (Active <-> Passive)
-  // NOTE: Automated active-to-passive inversion is disabled per strict user directive
-  // to avoid sentence scrambling, broken relativization, and trailing dangling fragments.
+  // 3. Multi-word Academic Phrasal Collocation Restructuring
+  // Transposes multi-word academic patterns and scholarly idioms while strictly locking protected statistical terms
+  const { lockedText: textForPhrasal, restore: restorePhrasalLocks } = lockStatisticalAndAcademicExpressions(text);
+  let phrasalTransformed = textForPhrasal;
+
+  for (const phr of ACADEMIC_PHRASAL_TRANSFORMS) {
+    const phrRegex = new RegExp(phr.pattern.source, 'gi');
+    if (phrRegex.test(phrasalTransformed)) {
+      phrasalTransformed = phrasalTransformed.replace(phrRegex, (match) => {
+        const candidates = phr[tone] || phr.academic;
+        if (!candidates || candidates.length === 0) return match;
+        const selected = candidates[(plan.sentenceIndex + match.length) % candidates.length];
+        const inflected = inflectVerbCollocation(match, selected);
+        const replaced = matchCase(match, inflected);
+        techniques.push('phrase_shift');
+        rulesExplanation.push(phr.explanation);
+        wordChanges.push({
+          id: getUniqueId('phr'),
+          original: match,
+          replaced,
+          alternatives: [match, ...candidates],
+          technique: 'phrase_shift',
+          startIndex: 0,
+          endIndex: 0,
+          notes: phr.explanation,
+        });
+        return replaced;
+      });
+    }
+  }
+  text = restorePhrasalLocks(phrasalTransformed);
+
+  // 4. Apply Voice Transformation (Active <-> Passive)
   let appliedVoice: 'active' | 'passive' | 'neutral' = detectVoice(text).voice;
   if (plan.voiceDirective === 'active' && appliedVoice === 'passive') {
     const vRes = passiveToActive(text);
@@ -244,9 +335,17 @@ export function executeLinguisticRulePlan(
       techniques.push('voice_active');
       rulesExplanation.push(vRes.explanation || 'Restructured passive construction to active voice');
     }
+  } else if (plan.voiceDirective === 'passive' && appliedVoice === 'active') {
+    const vRes = activeToPassive(text);
+    if (vRes.wasTransformed) {
+      text = vRes.transformedText;
+      appliedVoice = 'passive';
+      techniques.push('voice_passive');
+      rulesExplanation.push(vRes.explanation || 'Restructured active construction to passive voice');
+    }
   }
 
-  // 4. Safe Clause Inversion / Fronting
+  // 5. Safe Clause Inversion / Fronting
   if (plan.reorderClause) {
     const reordered = reorderClauses(text);
     if (reordered.modified) {
@@ -259,7 +358,7 @@ export function executeLinguisticRulePlan(
     }
   }
 
-  // 5. Apply Deep Nominalization / De-nominalization
+  // 6. Apply Deep Nominalization / De-nominalization
   if (plan.nominalizeVerb && DEEP_NOMINALIZATIONS[plan.nominalizeVerb]) {
     const entry = DEEP_NOMINALIZATIONS[plan.nominalizeVerb];
     const phrases = tone === 'academic' ? entry.academicPhrases : entry.professionalPhrases;
@@ -285,7 +384,7 @@ export function executeLinguisticRulePlan(
     }
   }
 
-  // 6. Apply Litotes / Polarity Inversion
+  // 7. Apply Litotes / Polarity Inversion
   if (plan.litotesShift) {
     for (const pair of EXTENSIVE_LITOTES_PAIRS) {
       const affRegex = new RegExp(`\\b${pair.affirmative}\\b`, 'gi');
@@ -308,7 +407,7 @@ export function executeLinguisticRulePlan(
     }
   }
 
-  // 7. Context-Aware Lexical Substitution via EXTENSIVE_LEXICON
+  // 8. Context-Aware Lexical Substitution via EXTENSIVE_LEXICON
   // Lock all statistical notations, parentheticals, citations, and academic constructs
   const { lockedText: textToSub, restore: restoreLockedSub } = lockStatisticalAndAcademicExpressions(text);
   const protectedSpans = preserveTechnicalTerms ? findProtectedSpans(textToSub) : [];
@@ -317,8 +416,11 @@ export function executeLinguisticRulePlan(
   let charOffset = 0;
   let wordIdx = 0;
   let substitutionsCount = 0;
-  // Natural lexical variation budget: Max 2 substitutions for standard sentences, 3 for long sentences (> 24 tokens)
-  const maxAllowedSubstitutions = Math.min(3, Math.max(1, Math.floor(taggedTokens.length / 8)));
+
+  // Dynamic substitution density: In radical mode, allow substantial transformation (up to 70% of tokens)
+  const substitutionRatio = intensity === 'radical' ? 0.70 : intensity === 'balanced' ? 0.45 : 0.20;
+  const minSubs = intensity === 'radical' ? 5 : intensity === 'balanced' ? 3 : 1;
+  const maxAllowedSubstitutions = Math.max(minSubs, Math.floor(taggedTokens.length * substitutionRatio));
 
   for (let i = 0; i < taggedTokens.length; i++) {
     const item = taggedTokens[i];
@@ -496,6 +598,14 @@ export function executeLinguisticRulePlan(
   }
 
   // 10. Restore Domain Invariants (sample, dataset, correlated, university students)
+  text = restoreDomainTerms(rawSentenceText, text);
+
+  // 10b. Apply 25-Rule Anti-AI Humanizer (strips AI clichés, corrects Not X but Y, balances syntax)
+  const humanized = applyLinguisticHumanizationRules(text, tone);
+  if (humanized.appliedRulesCount > 0) {
+    text = humanized.transformedText;
+    rulesExplanation.push(...humanized.rulesApplied);
+  }
   text = restoreDomainTerms(rawSentenceText, text);
 
   // 11. Re-attach prefix before colon if present

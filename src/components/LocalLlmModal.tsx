@@ -79,8 +79,8 @@ export function LocalLlmModal({ isOpen, onClose, config, onChange }: LocalLlmMod
               <Cpu className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-base font-semibold text-white">Local LLM Setup</h3>
-              <p className="text-xs text-slate-400">Connect on-device models via Ollama or OpenAI-compatible servers</p>
+              <h3 className="text-base font-semibold text-white">Local Hybrid Engine Setup</h3>
+              <p className="text-xs text-slate-400">On-device neural restructuring (Gemma, Llama) combined with deterministic linguistic rules</p>
             </div>
           </div>
           <button

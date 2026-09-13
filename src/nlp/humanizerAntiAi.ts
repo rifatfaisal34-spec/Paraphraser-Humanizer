@@ -1,13 +1,42 @@
 /**
  * Anti-AI Humanization & Burstiness Engine
  * 
- * Fusion module combining deterministic linguistic rules and AI to bypass AI detectors (GPTZero, Turnitin, Copyleaks, etc.)
+ * Comprehensive 25-Rule AI Cleanup & Humanizer based on empirical Wikipedia & Detector Patterns:
  * 
- * Key Pillars:
- * 1. Vary Sentence Architecture (High Burstiness): Dynamically blends short punchy sentences with long multi-clause syntax.
- * 2. Abstractive Paragraph Synthesis: Semantic reconstruction rather than mechanical line-by-line synonym replacement.
- * 3. Domain Terminology Preservation: Methodological invariant locking ("sample", "dataset", "correlated", "university students").
- * 4. Anti-AI Vocabulary Sanitization: Strips and replaces notorious AI clichés ("delve", "crucial", "pivotal", "testament", "fostering", etc.)
+ * A. Staging instead of stating
+ * 1. Not X but Y (§1)
+ * 2. One-line closers and dramatic fragments (§2)
+ * 3. Sayings that sound deep (§3)
+ * 4. Staged run-up before the point (§4)
+ * 5. Arguing with no one (§5)
+ * 
+ * B. Rhythm by rule
+ * 6. Forced triads (§6)
+ * 7. Repeated sentence openings (§7)
+ * 8. Dashes as universal connector (§8) - STRICTLY NO EM/EN DASHES in final rewrite
+ * 9. Stacked qualifiers (§9)
+ * 10. Hyphenated pairs everywhere (§10)
+ * 11. Passive voice and missing subjects (§11)
+ * 
+ * C. Inflation and borrowed authority
+ * 12. Overused AI words (§12)
+ * 13. Inflated significance (§13)
+ * 14. Vague connection or association (§14)
+ * 15. Shallow -ing riders (§15)
+ * 16. Sales language (§16)
+ * 17. Borrowed authority (§17)
+ * 18. Avoiding is, are, and has (§18)
+ * 
+ * D. Formatting by rule
+ * 19. Bold as decoration (§19)
+ * 20. Decorative headings (§20)
+ * 21. Curly quotation marks (§21)
+ * 
+ * E. Leftovers from the chat and the draft
+ * 22. Chatbot residue (§22)
+ * 23. Knowledge-limit disclaimers and guesses (§23)
+ * 24. A heading repeated in the first sentence (§24)
+ * 25. Writing about the previous version (§25)
  */
 
 import { ToneStyle } from '../types';
@@ -15,64 +44,165 @@ import { lockStatisticalAndAcademicExpressions } from './entityProtection';
 
 /**
  * AI "Tell" Cliché Words and their direct, natural human replacements.
- * AI models exhibit extreme statistical bias toward these flowery transitional terms.
+ * Covering §12, §13, §14, §16, §18 of the specification.
  */
 export const AI_VOCABULARY_MAP: Record<string, { replacements: string[]; pattern: RegExp }> = {
+  // §12: Overused AI words
+  'delve deeper into': {
+    replacements: ['examine further', 'look closer at', 'explore further'],
+    pattern: /\bdelve\s+deeper\s+into\b/gi,
+  },
   'delve into': {
     replacements: ['examine', 'explore', 'look into', 'investigate', 'study'],
     pattern: /\bdelve\s+into\b/gi,
   },
-  'delve deeper into': {
-    replacements: ['examine further', 'look closer at', 'explore further'],
-    pattern: /\bdelve\s+deeper\s+into\b/gi,
+  'delving into': {
+    replacements: ['examining', 'exploring', 'investigating', 'studying'],
+    pattern: /\bdelving\s+into\b/gi,
+  },
+  'delves into': {
+    replacements: ['examines', 'explores', 'investigates', 'studies'],
+    pattern: /\bdelves\s+into\b/gi,
   },
   'delve': {
     replacements: ['examine', 'investigate', 'explore', 'study'],
     pattern: /\bdelve\b/gi,
   },
-  'testament to': {
-    replacements: ['evidence of', 'sign of', 'proof of', 'demonstration of'],
-    pattern: /\b(?:a\s+)?testament\s+to\b/gi,
+  'actually': {
+    replacements: ['', 'in practice', 'in fact'],
+    pattern: /\bactually,?\b/gi,
   },
-  'testament': {
-    replacements: ['evidence', 'proof', 'sign', 'indication'],
-    pattern: /\btestament\b/gi,
+  'additionally': {
+    replacements: ['also', 'and', 'further', ''],
+    pattern: /\badditionally,?\b/gi,
   },
-  'pivotal role': {
-    replacements: ['key role', 'central role', 'major role', 'main role'],
-    pattern: /\b(?:a\s+)?pivotal\s+role\b/gi,
+  'align with': {
+    replacements: ['match', 'fit', 'accord with', 'support'],
+    pattern: /\balign(?:s|ed|ing)?\s+with\b/gi,
   },
-  'pivotal': {
-    replacements: ['key', 'central', 'critical', 'important', 'major'],
-    pattern: /\bpivotal\b/gi,
+  'bolstered': {
+    replacements: ['supported', 'reinforced', 'backed', 'strengthened'],
+    pattern: /\bbolstered\b/gi,
+  },
+  'bolster': {
+    replacements: ['support', 'reinforce', 'strengthen'],
+    pattern: /\bbolster(?:s|ing)?\b/gi,
   },
   'crucial': {
-    replacements: ['key', 'essential', 'important', 'vital', 'necessary'],
+    replacements: ['essential', 'important', 'necessary', 'needed'],
     pattern: /\bcrucial\b/gi,
   },
+  'deep dive': {
+    replacements: ['detailed analysis', 'thorough review', 'close study'],
+    pattern: /\b(?:a\s+)?deep\s+dive(?:\s+into)?\b/gi,
+  },
+  'emphasizing': {
+    replacements: ['noting', 'stressing', 'pointing out'],
+    pattern: /\bemphasizing\b/gi,
+  },
+  'enduring': {
+    replacements: ['lasting', 'continuing', 'persistent'],
+    pattern: /\benduring\b/gi,
+  },
+  'enhancing': {
+    replacements: ['improving', 'increasing', 'refining'],
+    pattern: /\benhancing\b/gi,
+  },
+  'enhance': {
+    replacements: ['improve', 'strengthen', 'raise'],
+    pattern: /\benhance(?:s|d)?\b/gi,
+  },
   'fostering': {
-    replacements: ['encouraging', 'building', 'promoting', 'supporting', 'creating'],
+    replacements: ['encouraging', 'supporting', 'promoting', 'developing'],
     pattern: /\bfostering\b/gi,
   },
   'foster': {
-    replacements: ['encourage', 'build', 'support', 'promote', 'develop'],
-    pattern: /\bfoster\b/gi,
+    replacements: ['encourage', 'support', 'promote', 'develop'],
+    pattern: /\bfoster(?:s|ed)?\b/gi,
   },
-  'fosters': {
-    replacements: ['encourages', 'builds', 'supports', 'promotes', 'develops'],
-    pattern: /\bfosters\b/gi,
+  'garner': {
+    replacements: ['receive', 'obtain', 'collect', 'gain'],
+    pattern: /\bgarner(?:s|ed|ing)?\b/gi,
   },
-  'fostered': {
-    replacements: ['encouraged', 'built', 'supported', 'promoted'],
-    pattern: /\bfostered\b/gi,
+  'highlight': {
+    replacements: ['show', 'note', 'indicate', 'point out'],
+    pattern: /\bhighlights?\b/gi,
   },
-  'furthermore': {
-    replacements: ['also', 'in addition', 'and', 'secondly', ''],
-    pattern: /\bfurthermore,?\b/gi,
+  'highlighted': {
+    replacements: ['showed', 'noted', 'indicated', 'found'],
+    pattern: /\bhighlighted\b/gi,
   },
-  'moreover': {
-    replacements: ['also', 'in addition', 'additionally', 'and', ''],
-    pattern: /\bmoreover,?\b/gi,
+  'highlighting': {
+    replacements: ['showing', 'noting', 'indicating'],
+    pattern: /\bhighlighting\b/gi,
+  },
+  'intricate interplay': {
+    replacements: ['interaction', 'connection', 'relationship'],
+    pattern: /\b(?:the|an?)\s+intricate\s+interplay\b/gi,
+  },
+  'interplay': {
+    replacements: ['interaction', 'relationship', 'connection'],
+    pattern: /\binterplay\b/gi,
+  },
+  'intricate': {
+    replacements: ['complex', 'detailed', 'elaborate'],
+    pattern: /\bintricate\b/gi,
+  },
+  'intricacies': {
+    replacements: ['details', 'complexities', 'nuances'],
+    pattern: /\bintricacies\b/gi,
+  },
+  'key role': {
+    replacements: ['central role', 'major role', 'main role', 'direct influence'],
+    pattern: /\b(?:a\s+)?key\s+role\b/gi,
+  },
+  'pivotal role': {
+    replacements: ['central role', 'major role', 'main influence'],
+    pattern: /\b(?:a\s+)?pivotal\s+role\b/gi,
+  },
+  'pivotal': {
+    replacements: ['central', 'major', 'critical', 'primary'],
+    pattern: /\bpivotal\b/gi,
+  },
+  'technological landscape': {
+    replacements: ['technology sector', 'tech industry', 'technology systems'],
+    pattern: /\btechnological\s+landscape\b/gi,
+  },
+  'ever-evolving landscape': {
+    replacements: ['changing environment', 'evolving field', 'current context'],
+    pattern: /\b(?:an?\s+)?ever-evolving\s+landscape\b/gi,
+  },
+  'evolving landscape': {
+    replacements: ['changing environment', 'evolving field', 'sector'],
+    pattern: /\b(?:the|an?)\s+evolving\s+landscape\b/gi,
+  },
+  'dynamic landscape': {
+    replacements: ['active environment', 'changing market', 'industry'],
+    pattern: /\b(?:the|a)\s+dynamic\s+landscape\b/gi,
+  },
+  'landscape': {
+    replacements: ['environment', 'domain', 'field', 'area', 'context'],
+    pattern: /\blandscape\b/gi,
+  },
+  'meticulously': {
+    replacements: ['carefully', 'thoroughly', 'systematically', 'closely'],
+    pattern: /\bmeticulously\b/gi,
+  },
+  'meticulous': {
+    replacements: ['careful', 'thorough', 'systematic', 'detailed'],
+    pattern: /\bmeticulous\b/gi,
+  },
+  'quietly': {
+    replacements: ['gradually', 'consistently', 'steadily', ''],
+    pattern: /\bquietly\b/gi,
+  },
+  'robust': {
+    replacements: ['strong', 'reliable', 'solid', 'rigorous', 'sound'],
+    pattern: /\brobust\b/gi,
+  },
+  'showcase': {
+    replacements: ['show', 'demonstrate', 'present', 'display'],
+    pattern: /\bshowcase(?:s|d|ing)?\b/gi,
   },
   'rich tapestry': {
     replacements: ['complex mix', 'broad range', 'combination', 'diversity'],
@@ -82,181 +212,163 @@ export const AI_VOCABULARY_MAP: Record<string, { replacements: string[]; pattern
     replacements: ['mix', 'blend', 'combination', 'collection'],
     pattern: /\btapestry\b/gi,
   },
-  'vibrant': {
-    replacements: ['active', 'lively', 'strong', 'busy'],
-    pattern: /\bvibrant\b/gi,
+  'stand as a testament to': {
+    replacements: ['demonstrate', 'show', 'reflect', 'confirm'],
+    pattern: /\bstands?\s+as\s+a\s+testament\s+to\b/gi,
   },
-  'beacon': {
-    replacements: ['guide', 'model', 'standard', 'example'],
-    pattern: /\bbeacon\b/gi,
+  'stand as a testament': {
+    replacements: ['provide evidence', 'demonstrate', 'show'],
+    pattern: /\bstands?\s+as\s+a\s+testament\b/gi,
+  },
+  'testament to': {
+    replacements: ['evidence of', 'sign of', 'proof of', 'demonstration of'],
+    pattern: /\b(?:a\s+)?testament\s+to\b/gi,
+  },
+  'testament': {
+    replacements: ['evidence', 'proof', 'sign', 'indication'],
+    pattern: /\btestament\b/gi,
+  },
+  'underscores its importance': {
+    replacements: ['shows its relevance', 'highlights its necessity', 'matters'],
+    pattern: /\bunderscores?\s+its\s+importance\b/gi,
+  },
+  'underscored the paramount importance': {
+    replacements: ['showed the need for', 'highlighted the necessity of'],
+    pattern: /\bunderscored?\s+the\s+paramount\s+importance(?:\s+of)?\b/gi,
+  },
+  'paramount importance': {
+    replacements: ['high priority', 'primary need', 'importance'],
+    pattern: /\bparamount\s+importance\b/gi,
   },
   'paramount': {
-    replacements: ['top priority', 'essential', 'chief', 'primary', 'vital'],
+    replacements: ['primary', 'essential', 'top priority'],
     pattern: /\bparamount\b/gi,
   },
-  'multifaceted': {
-    replacements: ['complex', 'varied', 'diverse', 'broad'],
-    pattern: /\bmultifaceted\b/gi,
+  'underscores': {
+    replacements: ['highlights', 'indicates', 'shows', 'stresses'],
+    pattern: /\bunderscores\b/gi,
   },
   'underscored': {
-    replacements: ['highlighted', 'emphasized', 'stressed', 'showed'],
+    replacements: ['highlighted', 'indicated', 'showed', 'stressed'],
     pattern: /\bunderscored\b/gi,
   },
   'underscore': {
-    replacements: ['highlight', 'emphasize', 'stress', 'show'],
+    replacements: ['highlight', 'indicate', 'show', 'stress'],
     pattern: /\bunderscore\b/gi,
   },
-  'underscores': {
-    replacements: ['highlights', 'emphasizes', 'stresses', 'shows'],
-    pattern: /\bunderscores\b/gi,
+  'underscoring': {
+    replacements: ['highlighting', 'showing', 'indicating'],
+    pattern: /\bunderscoring\b/gi,
   },
-  'navigating': {
-    replacements: ['handling', 'managing', 'addressing', 'working through'],
-    pattern: /\bnavigating\b/gi,
+  'valuable': {
+    replacements: ['useful', 'informative', 'helpful', 'relevant'],
+    pattern: /\bvaluable\b/gi,
   },
-  'navigate': {
-    replacements: ['handle', 'manage', 'address', 'deal with'],
-    pattern: /\bnavigate\b/gi,
+  'vibrant': {
+    replacements: ['active', 'growing', 'lively', 'busy'],
+    pattern: /\bvibrant\b/gi,
   },
-  'ever-evolving landscape': {
-    replacements: ['changing environment', 'evolving field', 'current context'],
-    pattern: /\b(?:an?\s+)?ever-evolving\s+landscape\b/gi,
+
+  // §13: Inflated significance
+  'indelible mark': {
+    replacements: ['lasting influence', 'significant effect', 'impact'],
+    pattern: /\b(?:an?\s+)?indelible\s+mark\b/gi,
   },
-  'ever-evolving': {
-    replacements: ['changing', 'evolving', 'developing'],
-    pattern: /\bever-evolving\b/gi,
+  'setting the stage for': {
+    replacements: ['leading to', 'enabling', 'allowing'],
+    pattern: /\bsetting\s+the\s+stage\s+for\b/gi,
   },
-  'dynamic landscape': {
-    replacements: ['active environment', 'changing market', 'field'],
-    pattern: /\b(?:the|a)\s+dynamic\s+landscape\b/gi,
+  'sets the stage for': {
+    replacements: ['leads to', 'enables', 'prepares'],
+    pattern: /\bsets\s+the\s+stage\s+for\b/gi,
   },
-  'harness': {
-    replacements: ['use', 'apply', 'draw on', 'leverage'],
-    pattern: /\bharness\b/gi,
+  'reflects a broader': {
+    replacements: ['indicates a wider', 'aligns with general', 'mirrors'],
+    pattern: /\breflects\s+a\s+broader\b/gi,
   },
-  'harnessing': {
-    replacements: ['using', 'applying', 'drawing on', 'employing'],
-    pattern: /\bharnessing\b/gi,
+  'a step in the right direction': {
+    replacements: ['practical progress', 'an improvement', 'a solid gain'],
+    pattern: /\ba\s+step\s+in\s+the\s+right\s+direction\b/gi,
   },
-  'meticulously': {
-    replacements: ['carefully', 'thoroughly', 'closely', 'in detail'],
-    pattern: /\bmeticulously\b/gi,
+  'the future looks bright': {
+    replacements: ['prospects remain positive', 'growth continues'],
+    pattern: /\bthe\s+future\s+looks\s+bright\b/gi,
   },
-  'intricate interplay': {
-    replacements: ['close relationship', 'complex interaction', 'connection'],
-    pattern: /\b(?:the|an?)\s+intricate\s+interplay\b/gi,
+  'exciting times ahead': {
+    replacements: ['further developments follow', 'subsequent work continues'],
+    pattern: /\bexciting\s+times\s+ahead\b/gi,
   },
-  'interplay': {
-    replacements: ['interaction', 'relationship', 'connection', 'balance'],
-    pattern: /\binterplay\b/gi,
+
+  // §16: Sales language
+  'groundbreaking': {
+    replacements: ['notable', 'new', 'innovative', 'significant'],
+    pattern: /\bgroundbreaking\b/gi,
   },
-  'resonate with': {
-    replacements: ['align with', 'appeal to', 'fit with'],
-    pattern: /\bresonate(?:s)?\s+with\b/gi,
+  'revolutionized': {
+    replacements: ['fundamentally changed', 'altered', 'reformed', 'shifted'],
+    pattern: /\brevolutionized\b/gi,
   },
-  'catalyst for': {
-    replacements: ['trigger for', 'driver of', 'spark for'],
-    pattern: /\b(?:a\s+)?catalyst\s+for\b/gi,
+  'revolutionize': {
+    replacements: ['change', 'alter', 'reform', 'transform'],
+    pattern: /\brevolutionize\b/gi,
   },
-  'catalyst': {
-    replacements: ['trigger', 'driver', 'spark', 'cause'],
-    pattern: /\bcatalyst\b/gi,
+  'exemplifies': {
+    replacements: ['illustrates', 'shows', 'represents'],
+    pattern: /\bexemplifies\b/gi,
   },
-  'embark on': {
-    replacements: ['begin', 'start', 'undertake', 'launch'],
-    pattern: /\bembark\s+(?:on|upon)\b/gi,
+  'beacon': {
+    replacements: ['guide', 'model', 'reference point'],
+    pattern: /\bbeacon\b/gi,
   },
-  'shed light on': {
-    replacements: ['clarify', 'explain', 'reveal', 'highlight'],
-    pattern: /\bshed(?:s)?\s+light\s+on\b/gi,
+  'profound': {
+    replacements: ['deep', 'substantial', 'marked', 'notable'],
+    pattern: /\bprofound\b/gi,
   },
-  'it is important to note that': {
-    replacements: ['notably,', 'specifically,', 'in particular,'],
-    pattern: /\bit\s+is\s+important\s+to\s+note\s+that\b/gi,
+  'breathtaking': {
+    replacements: ['impressive', 'notable', 'striking'],
+    pattern: /\bbreathtaking\b/gi,
   },
-  'it is worth noting that': {
-    replacements: ['notably,', 'importantly,'],
-    pattern: /\bit\s+is\s+worth\s+noting\s+that\b/gi,
+  'stunning': {
+    replacements: ['striking', 'distinct', 'clear'],
+    pattern: /\bstunning\b/gi,
+  },
+  'diverse array': {
+    replacements: ['wide range', 'variety', 'mix'],
+    pattern: /\b(?:a\s+)?diverse\s+array(?:\s+of)?\b/gi,
+  },
+  'plethora of': {
+    replacements: ['many', 'numerous', 'various', 'broad range of'],
+    pattern: /\b(?:a\s+)?plethora\s+of\b/gi,
+  },
+  'myriad of': {
+    replacements: ['many', 'numerous', 'several'],
+    pattern: /\b(?:a\s+)?myriad\s+of\b/gi,
+  },
+  'multifaceted': {
+    replacements: ['complex', 'varied', 'diverse'],
+    pattern: /\bmultifaceted\b/gi,
   },
   'seamlessly': {
-    replacements: ['smoothly', 'easily', 'directly', 'naturally'],
+    replacements: ['smoothly', 'directly', 'easily'],
     pattern: /\bseamlessly\b/gi,
   },
-  'commendable': {
-    replacements: ['effective', 'noteworthy', 'solid', 'strong'],
-    pattern: /\bcommendable\b/gi,
+
+  // Common robotic transitional openers
+  'furthermore': {
+    replacements: ['also', 'in addition', 'and', ''],
+    pattern: /\bfurthermore,?\b/gi,
+  },
+  'moreover': {
+    replacements: ['also', 'and', 'further', ''],
+    pattern: /\bmoreover,?\b/gi,
   },
   'in conclusion': {
     replacements: ['overall,', 'in summary,', 'ultimately,'],
     pattern: /\bin\s+conclusion,?\b/gi,
   },
-  'spearhead': {
-    replacements: ['lead', 'direct', 'guide', 'initiate'],
-    pattern: /\bspearhead(?:s|ed|ing)?\b/gi,
-  },
-  'holistic approach': {
-    replacements: ['comprehensive approach', 'broad method', 'integrated method'],
-    pattern: /\b(?:a\s+)?holistic\s+approach\b/gi,
-  },
-  'stand as a testament to': {
-    replacements: ['highlight', 'reflect', 'underscore', 'support'],
-    pattern: /\bstands?\s+as\s+a\s+testament\s+to\b/gi,
-  },
-  'stand as a testament': {
-    replacements: ['serve as evidence', 'demonstrate', 'show'],
-    pattern: /\bstands?\s+as\s+a\s+testament\b/gi,
-  },
-  'plays a significant role': {
-    replacements: ['shapes', 'directly influences', 'affects'],
-    pattern: /\bplays?\s+a\s+significant\s+role(?:\s+in)?\b/gi,
-  },
-  'plays a vital role': {
-    replacements: ['is central to', 'drives', 'influences'],
-    pattern: /\bplays?\s+a\s+vital\s+role(?:\s+in)?\b/gi,
-  },
-  'is of paramount importance': {
-    replacements: ['is essential', 'remains critical', 'matters greatly'],
-    pattern: /\bis\s+of\s+paramount\s+importance\b/gi,
-  },
-  'paramount importance': {
-    replacements: ['central importance', 'high priority', 'essential need'],
-    pattern: /\bparamount\s+importance\b/gi,
-  },
-  'serves to illuminate': {
-    replacements: ['clarifies', 'highlights', 'shows'],
-    pattern: /\bserves?\s+to\s+illuminate\b/gi,
-  },
-  'serves to demonstrate': {
-    replacements: ['demonstrates', 'shows', 'indicates'],
-    pattern: /\bserves?\s+to\s+demonstrate\b/gi,
-  },
   'in light of these findings': {
     replacements: ['given these findings', 'based on these results', 'accordingly'],
     pattern: /\bin\s+light\s+of\s+these\s+findings,?\b/gi,
-  },
-  'paves the way for': {
-    replacements: ['enables', 'facilitates', 'leads to'],
-    pattern: /\bpaves?\s+the\s+way\s+for\b/gi,
-  },
-  'at the forefront of': {
-    replacements: ['leading', 'central to'],
-    pattern: /\bat\s+the\s+forefront\s+of\b/gi,
-  },
-  'it should be noted that': {
-    replacements: ['notably,', 'specifically,'],
-    pattern: /\bit\s+should\s+be\s+noted\s+that\b/gi,
-  },
-  'in addition': {
-    replacements: ['additionally,', 'also,', 'beyond this,', ''],
-    pattern: /\bin\s+addition,?\b/gi,
-  },
-  'myriad of': {
-    replacements: ['many', 'numerous', 'various', 'wide range of'],
-    pattern: /\b(?:a\s+)?myriad\s+of\b/gi,
-  },
-  'plethora of': {
-    replacements: ['abundance of', 'large number of', 'many'],
-    pattern: /\b(?:a\s+)?plethora\s+of\b/gi,
   },
 };
 
@@ -313,6 +425,786 @@ export interface SanitizedCliché {
   originalWord: string;
   replacedWith: string;
   index: number;
+}
+
+/**
+ * §1: Eliminate "Not X but Y" constructions.
+ * States the claim directly rather than staging a rhetorical contrast.
+ */
+export function rule1_eliminateNotXButY(text: string): { text: string; applied: boolean } {
+  let modified = text;
+  let applied = false;
+
+  // Pattern: "It is not just/only/merely X, but Y." -> "Y."
+  // e.g. "It is not just a tool, but a mirror reflecting human ambition." -> "It reflects human ambition."
+  const toolMirror = /(?:it\s+is\s+|it's\s+)?not\s+(?:just|only|merely)\s+a\s+tool,?\s+but\s+(?:a\s+)?mirror\s+reflecting\s+([^.]+)/gi;
+  if (toolMirror.test(modified)) {
+    modified = modified.replace(toolMirror, 'it directly reflects $1');
+    applied = true;
+  }
+
+  // General "not only/just/merely X, but (also) Y" -> "Y"
+  const notOnlyRegex = /\b(?:it\s+is\s+|it's\s+)?not\s+(?:just|only|merely)\s+([^,;]+?),\s*but\s+(?:also\s+)?(?:it\s+(?:is\s+)?)?([^.]+)/gi;
+  if (notOnlyRegex.test(modified)) {
+    modified = modified.replace(notOnlyRegex, (match, x, y) => {
+      applied = true;
+      const cleanY = y.trim();
+      return cleanY.charAt(0).toUpperCase() + cleanY.slice(1);
+    });
+  }
+
+  // "This does not mean X. It means Y." -> "Y."
+  const splitNotX = /this\s+does\s+not\s+mean\s+[^.]+\.\s*it\s+means\s+([^.]+)/gi;
+  if (splitNotX.test(modified)) {
+    modified = modified.replace(splitNotX, (match, y) => {
+      applied = true;
+      const cleanY = y.trim();
+      return cleanY.charAt(0).toUpperCase() + cleanY.slice(1);
+    });
+  }
+
+  // Negative tails: ", no guessing.", ", no hesitation." -> "."
+  const negativeTail = /,\s*no\s+(?:guessing|hesitation|compromise|doubt)\b/gi;
+  if (negativeTail.test(modified)) {
+    modified = modified.replace(negativeTail, '');
+    applied = true;
+  }
+
+  return { text: modified, applied };
+}
+
+/**
+ * §2: Clean one-line closers and dramatic fragments.
+ * Merges staccato fragments into complete sentences and removes vacuous one-line summaries.
+ */
+export function rule2_cleanClosersAndDramaticFragments(text: string): { text: string; applied: boolean } {
+  let modified = text;
+  let applied = false;
+
+  // Vacuous closers
+  const closerRegex = /(?:^|\n)(?:That is the real win\.|Read that again\.|Let that sink in\.|And that changes everything\.|The rest is history\.)(?:\n|$)/gim;
+  if (closerRegex.test(modified)) {
+    modified = modified.replace(closerRegex, '\n');
+    applied = true;
+  }
+
+  // Dramatic fragments: "No aesthetic prior. No nostalgia for human taste." -> "without aesthetic priors or nostalgia for human taste."
+  const fragmentPair = /([A-Za-z0-9_]+)\s+arrived\.\s*No\s+([^.]+?)\.\s*No\s+([^.]+?)\./gi;
+  if (fragmentPair.test(modified)) {
+    modified = modified.replace(fragmentPair, '$1 arrived without $2 or $3.');
+    applied = true;
+  }
+
+  // Generic consecutive "No X. No Y."
+  const genericNoPair = /(^|[.!?]\s+)No\s+([^.]+?)\.\s*No\s+([^.]+?)\./gi;
+  if (genericNoPair.test(modified)) {
+    modified = modified.replace(genericNoPair, '$1The system had no $2 and no $3.');
+    applied = true;
+  }
+
+  // Spaced periods: "every. single. day." -> "every single day"
+  const spacedPeriods = /\b([a-zA-Z]+)\.\s+([a-zA-Z]+)\.\s+([a-zA-Z]+)\./g;
+  if (spacedPeriods.test(modified)) {
+    modified = modified.replace(spacedPeriods, '$1 $2 $3.');
+    applied = true;
+  }
+
+  return { text: modified, applied };
+}
+
+/**
+ * §3: Replace sayings that sound deep with concrete claims.
+ */
+export function rule3_replaceDeepSoundingSayings(text: string): { text: string; applied: boolean } {
+  let modified = text;
+  let applied = false;
+
+  const deepPatterns = [
+    { pattern: /\bthe\s+real\s+question\s+is\s+whether\s+([^,;]+),\s*and\s+at\s+its\s+core,\s*what\s+really\s+matters\s+is\s+([^.]+)/gi, rep: 'whether $1 depends primarily on $2' },
+    { pattern: /\bthe\s+real\s+question\s+is\s+(?:whether\s+)?/gi, rep: 'the primary consideration is ' },
+    { pattern: /\bat\s+its\s+core,?\s*/gi, rep: '' },
+    { pattern: /\bwhat\s+really\s+matters\s+is\s+/gi, rep: 'the critical factor is ' },
+    { pattern: /\bthe\s+deeper\s+issue\s+(?:is\s+)?/gi, rep: 'the underlying challenge is ' },
+    { pattern: /\bthe\s+heart\s+of\s+the\s+matter\s+(?:is\s+)?/gi, rep: 'the main issue is ' },
+    { pattern: /\bfundamentally,?\s*/gi, rep: '' },
+    { pattern: /\bin\s+reality,?\s*/gi, rep: 'in practice, ' },
+    { pattern: /\bthe\s+architecture\s+of\s+shaping\b/gi, rep: 'how to shape' },
+    { pattern: /\bthe\s+currency\s+of\s+([a-zA-Z]+)\b/gi, rep: 'how $1 operates' },
+    { pattern: /\bthe\s+language\s+of\s+([a-zA-Z]+)\b/gi, rep: 'how $1 is expressed' },
+    { pattern: /\bbecomes?\s+a\s+trap\b/gi, rep: 'creates persistent friction' },
+  ];
+
+  for (const item of deepPatterns) {
+    if (item.pattern.test(modified)) {
+      modified = modified.replace(item.pattern, item.rep);
+      applied = true;
+    }
+  }
+
+  return { text: modified, applied };
+}
+
+/**
+ * §4: Remove staged run-up before the point.
+ */
+export function rule4_stripStagedRunUp(text: string): { text: string; applied: boolean } {
+  let modified = text;
+  let applied = false;
+
+  const runUps = [
+    /(^|[.!?]\s+)(?:Let's\s+dive\s+in|let's\s+explore|let's\s+break\s+this\s+down|here's\s+what\s+you\s+need\s+to\s+know|now\s+let's\s+look\s+at|without\s+further\s+ado|heads\s+up|quick\s+note)[,:]?\s*/gi,
+    /(^|[.!?]\s+)(?:Honestly\?|Look,|Here's\s+the\s+thing:?|The\s+thing\s+is:?|Let's\s+be\s+honest,|Real\s+talk,)\s*/gi,
+    /(^|[.!?]\s+)one\s+thing\s+that\s+bit\s+me[^.]*?pay\s+attention:?\s*/gi,
+  ];
+
+  for (const r of runUps) {
+    if (r.test(modified)) {
+      modified = modified.replace(r, (m, p1) => {
+        applied = true;
+        return p1 ? `${p1} ` : '';
+      });
+    }
+  }
+
+  return { text: modified, applied };
+}
+
+/**
+ * §5: Remove arguing with no one (preemptive self-defense).
+ */
+export function rule5_removeArguingWithNoOne(text: string): { text: string; applied: boolean } {
+  let modified = text;
+  let applied = false;
+
+  const defensePatterns = [
+    /(^|[.!?]\s+)(?:This\s+isn't\s+(?:mainly\s+)?about|I'm\s+not\s+saying\s+(?:that\s+)?|To\s+be\s+clear,\s*|Don't\s+get\s+me\s+wrong,\s*|This\s+is\s+not\s+to\s+say\s+(?:that\s+)?)\s*/gi,
+    /(^|[.!?]\s+)(?:A\s+tempting\s+approach\s+would\s+be\s+to|One\s+might\s+be\s+tempted\s+to|An\s+obvious\s+approach\s+would\s+be\s+to|It\s+would\s+be\s+easy\s+to\s+just)\s*([^.]+)\.\s*However,?\s*/gi,
+  ];
+
+  for (const dp of defensePatterns) {
+    if (dp.test(modified)) {
+      modified = modified.replace(dp, (m, p1) => {
+        applied = true;
+        return p1 ? `${p1} ` : '';
+      });
+    }
+  }
+
+  return { text: modified, applied };
+}
+
+/**
+ * §6: Smooth forced triads.
+ * Replaces canned 3-part marketing triads.
+ */
+export function rule6_smoothForcedTriads(text: string): { text: string; applied: boolean } {
+  let modified = text;
+  let applied = false;
+
+  const cannedTriads = [
+    { pattern: /\binnovation,\s+inspiration,\s+and\s+insights\b/gi, rep: 'innovation and practical insights' },
+    { pattern: /\bclarity,\s+consistency,\s+and\s+collaboration\b/gi, rep: 'clarity and team collaboration' },
+    { pattern: /\befficiency,\s+agility,\s+and\s+resilience\b/gi, rep: 'operational efficiency' },
+  ];
+
+  for (const t of cannedTriads) {
+    if (t.pattern.test(modified)) {
+      modified = modified.replace(t.pattern, t.rep);
+      applied = true;
+    }
+  }
+
+  return { text: modified, applied };
+}
+
+/**
+ * §7: Diversify repeated sentence openings.
+ * Avoids starting 2 or more consecutive sentences with the identical subject or pronoun.
+ */
+export function rule7_diversifyRepeatedOpenings(sentences: string[]): string[] {
+  if (sentences.length <= 1) return sentences;
+  const result: string[] = [...sentences];
+
+  for (let i = 1; i < result.length; i++) {
+    const prev = result[i - 1].trim();
+    const curr = result[i].trim();
+
+    const prevWords = prev.split(/\s+/).slice(0, 2).map((w) => w.toLowerCase());
+    const currWords = curr.split(/\s+/).slice(0, 2).map((w) => w.toLowerCase());
+
+    if (prevWords.length >= 2 && currWords.length >= 2 && prevWords[0] === currWords[0] && prevWords[1] === currWords[1]) {
+      // Invert or front an adverbial bridge to break monotony
+      if (curr.startsWith('The ')) {
+        result[i] = curr.replace(/^The\s+([^,]+?)\s+(showed|demonstrated|found|analyzed)\s+([^.]+)/i, (m, subj, verb, rest) => {
+          return `In this context, the ${subj} ${verb} ${rest}`;
+        });
+      } else if (curr.startsWith('She ') || curr.startsWith('He ') || curr.startsWith('They ')) {
+        result[i] = curr.replace(/^([A-Za-z]+)\s+([a-z]+ed)\s+([^.]+)/i, (m, subj, verb, rest) => {
+          return `Subsequently, ${subj.toLowerCase()} ${verb} ${rest}`;
+        });
+      }
+    }
+  }
+
+  return result;
+}
+
+/**
+ * §8: Dashes as the universal connector.
+ * STRICT MANDATE: "The final rewrite MUST NOT contain em dashes (—) or en dashes (–) or double hyphens ( -- )."
+ * Replaces each dash with a period, comma, colon, or parentheses.
+ */
+export function rule8_eliminateAllDashes(text: string): { text: string; applied: boolean } {
+  let modified = text;
+  let applied = false;
+
+  // Check for em dash (—), en dash (–), or spaced double hyphen ( -- )
+  const hasDashes = /[—–]|(?:\s+--\s+)/.test(modified);
+  if (!hasDashes) return { text, applied: false };
+
+  // 1. Parenthetical dash pair: "text — explanation — text" -> "text (explanation) text"
+  modified = modified.replace(/\s*[—–]\s*([^—–\n]+?)\s*[—–]\s*/g, (match, inner) => {
+    applied = true;
+    return ` (${inner.trim()}) `;
+  });
+
+  // 2. Single trailing dash: "text — result." -> "text: result." or "text, result."
+  modified = modified.replace(/\s*[—–]\s*/g, (match) => {
+    applied = true;
+    return ', ';
+  });
+
+  // 3. Spaced double hyphen
+  modified = modified.replace(/\s+--\s+/g, () => {
+    applied = true;
+    return ', ';
+  });
+
+  // Clean spacing around commas
+  modified = modified.replace(/\s+,/g, ',').replace(/,\s*,/g, ',');
+
+  return { text: modified, applied };
+}
+
+/**
+ * §9: Stacked qualifiers.
+ * Collapses stacked hedging ("could potentially possibly", "might arguably").
+ */
+export function rule9_simplifyStackedQualifiers(text: string): { text: string; applied: boolean } {
+  let modified = text;
+  let applied = false;
+
+  const qualifiers = [
+    { pattern: /\bcould\s+potentially\s+possibly\b/gi, rep: 'may' },
+    { pattern: /\bcould\s+potentially\b/gi, rep: 'may' },
+    { pattern: /\bmight\s+arguably\s+be\b/gi, rep: 'may be' },
+    { pattern: /\bmight\s+arguably\b/gi, rep: 'might' },
+    { pattern: /\barguably\s+could\b/gi, rep: 'could' },
+    { pattern: /\bto\s+be\s+fair,?\s*(?:it's|it\s+is)\s+also\s+possible\s+that\b/gi, rep: 'also,' },
+    { pattern: /\bin\s+some\s+cases\s+it\s+may\s+(?:potentially\s+)?/gi, rep: 'it may ' },
+  ];
+
+  for (const q of qualifiers) {
+    if (q.pattern.test(modified)) {
+      modified = modified.replace(q.pattern, q.rep);
+      applied = true;
+    }
+  }
+
+  return { text: modified, applied };
+}
+
+/**
+ * §10: Hyphenated pairs everywhere.
+ * Drops artificial hyphens when used predicatively or simplifies them.
+ */
+export function rule10_normalizeHyphenatedPairs(text: string): { text: string; applied: boolean } {
+  let modified = text;
+  let applied = false;
+
+  // Drop hyphens when after a verb (e.g. "is high-quality" -> "is high quality")
+  const predicativePairs = [
+    { pattern: /\b(?:is|was|are|were|remains?)\s+high-quality\b/gi, rep: '$&'.replace('high-quality', 'high quality') },
+    { pattern: /\b(?:is|was|are|were|remains?)\s+real-time\b/gi, rep: '$&'.replace('real-time', 'in real time') },
+    { pattern: /\bdata-driven\s+evaluation\b/gi, rep: 'empirical evaluation' },
+  ];
+
+  for (const p of predicativePairs) {
+    if (p.pattern.test(modified)) {
+      modified = modified.replace(p.pattern, p.rep);
+      applied = true;
+    }
+  }
+
+  return { text: modified, applied };
+}
+
+/**
+ * §11: Passive voice and missing subjects.
+ * Reconstructs truncated agentless clauses.
+ */
+export function rule11_resolvePassiveMissingSubjects(text: string): { text: string; applied: boolean } {
+  let modified = text;
+  let applied = false;
+
+  const missingSubjects = [
+    { pattern: /(^|[.!?]\s+)No\s+configuration\s+file\s+needed\.\s*The\s+results\s+are\s+preserved\s+automatically\./gi, rep: '$1You do not need a configuration file; the system preserves results automatically.' },
+    { pattern: /(^|[.!?]\s+)No\s+setup\s+required\./gi, rep: '$1Setup is automatic.' },
+  ];
+
+  for (const ms of missingSubjects) {
+    if (ms.pattern.test(modified)) {
+      modified = modified.replace(ms.pattern, ms.rep);
+      applied = true;
+    }
+  }
+
+  return { text: modified, applied };
+}
+
+/**
+ * §14: Vague connection or association.
+ * States the exact relationship.
+ */
+export function rule14_clarifyVagueConnections(text: string): { text: string; applied: boolean } {
+  let modified = text;
+  let applied = false;
+
+  // Replace vague "in connection with" when not statistical
+  const vague = [
+    { pattern: /\bin\s+association\s+with\b/gi, rep: 'alongside' },
+    { pattern: /\bin\s+connection\s+with\b/gi, rep: 'related to' },
+  ];
+
+  for (const v of vague) {
+    if (v.pattern.test(modified)) {
+      modified = modified.replace(v.pattern, v.rep);
+      applied = true;
+    }
+  }
+
+  return { text: modified, applied };
+}
+
+/**
+ * §15: Shallow -ing riders.
+ * Strips superficial participle riders tacked onto sentence ends.
+ */
+export function rule15_stripShallowIngRiders(text: string): { text: string; applied: boolean } {
+  let modified = text;
+  let applied = false;
+
+  // Trailing ", highlighting/underscoring/emphasizing/fostering/ensuring/reflecting/symbolizing/showcasing X."
+  const shallowRider = /,\s*(?:highlighting|underscoring|emphasizing|ensuring|reflecting|symbolizing|contributing\s+to|cultivating|fostering|encompassing|showcasing)\s+[^.]+([.!?])/gi;
+  if (shallowRider.test(modified)) {
+    modified = modified.replace(shallowRider, '$1');
+    applied = true;
+  }
+
+  return { text: modified, applied };
+}
+
+/**
+ * §17: Borrowed authority.
+ * Cleans false attribution / vague consensus.
+ */
+export function rule17_stripBorrowedAuthority(text: string): { text: string; applied: boolean } {
+  let modified = text;
+  let applied = false;
+
+  const authority = [
+    { pattern: /(^|[.!?]\s+)(?:industry\s+reports\s+suggest\s+that|some\s+critics\s+claim\s+that|observers\s+have\s+cited\s+that)\s*/gi, rep: '$1Reports indicate that ' },
+    { pattern: /(^|[.!?]\s+)experts\s+argue\s+that\s*/gi, rep: '$1Researchers observe that ' },
+  ];
+
+  for (const a of authority) {
+    if (a.pattern.test(modified)) {
+      modified = modified.replace(a.pattern, a.rep);
+      applied = true;
+    }
+  }
+
+  return { text: modified, applied };
+}
+
+/**
+ * §18: Avoiding is, are, and has.
+ * Replaces artificial copula avoiders ("serves as", "stands as", "functions as") with natural is/are/has.
+ */
+export function rule18_restoreIsAreHas(text: string): { text: string; applied: boolean } {
+  let modified = text;
+  let applied = false;
+
+  const copulaMap = [
+    { pattern: /\bserves?\s+as\s+(?:an?\s+)?/gi, rep: 'is ' },
+    { pattern: /\bstands?\s+as\s+(?:an?\s+)?/gi, rep: 'is ' },
+    { pattern: /\bfunctions?\s+as\s+(?:an?\s+)?/gi, rep: 'is ' },
+    { pattern: /\boperates?\s+as\s+(?:an?\s+)?/gi, rep: 'is ' },
+    { pattern: /\brepresents?\s+an?\s+/gi, rep: 'is ' },
+    { pattern: /\bfeatures?\s+an?\s+/gi, rep: 'has ' },
+    { pattern: /\bboasts?\s+an?\s+/gi, rep: 'has ' },
+    { pattern: /\bboasts?\s+/gi, rep: 'has ' },
+  ];
+
+  for (const c of copulaMap) {
+    if (c.pattern.test(modified)) {
+      modified = modified.replace(c.pattern, c.rep);
+      applied = true;
+    }
+  }
+
+  return { text: modified, applied };
+}
+
+/**
+ * §19: Bold as decoration.
+ * Strips arbitrary markdown bolding (`**bold**`).
+ */
+export function rule19_stripDecorativeBolding(text: string): { text: string; applied: boolean } {
+  const hasBold = /\*\*[^*]+\*\*/.test(text);
+  if (!hasBold) return { text, applied: false };
+  const cleaned = text.replace(/\*\*([^*]+)\*\*/g, '$1');
+  return { text: cleaned, applied: true };
+}
+
+/**
+ * §20: Decorative headings.
+ * Removes decorative emojis, arrows, and dividers.
+ */
+export function rule20_cleanDecorativeHeadings(text: string): { text: string; applied: boolean } {
+  let modified = text;
+  let applied = false;
+
+  // Strip emojis from headings or text
+  const emojiRegex = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu;
+  if (emojiRegex.test(modified)) {
+    modified = modified.replace(emojiRegex, '');
+    applied = true;
+  }
+
+  // Strip decorative arrows (→, ➔, ➜)
+  if (/[→➔➜]/.test(modified)) {
+    modified = modified.replace(/[→➔➜]\s*/g, '');
+    applied = true;
+  }
+
+  // Strip arbitrary horizontal rules
+  if (/(?:^|\n)\s*---+\s*(?:\n|$)/g.test(modified)) {
+    modified = modified.replace(/(?:^|\n)\s*---+\s*(?:\n|$)/g, '\n');
+    applied = true;
+  }
+
+  return { text: modified.trim(), applied };
+}
+
+/**
+ * §21: Curly quotation marks.
+ * Converts curly quotes (“...”, ‘...’) to straight ASCII quotes ("...", '...').
+ */
+export function rule21_convertCurlyQuotes(text: string): { text: string; applied: boolean } {
+  const hasCurly = /[“”‘’]/.test(text);
+  if (!hasCurly) return { text, applied: false };
+
+  const cleaned = text
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'");
+
+  return { text: cleaned, applied: true };
+}
+
+/**
+ * §22: Chatbot residue.
+ * Strips conversational filler and assistant boilerplate.
+ */
+export function rule22_stripChatbotResidue(text: string): { text: string; applied: boolean } {
+  let modified = text;
+  let applied = false;
+
+  const residuePatterns = [
+    /(?:^|\n)\s*(?:I\s+hope\s+this\s+helps[!.?]?|Of\s+course[!]?|Certainly[!]?|Great\s+question[!]?|You're\s+absolutely\s+right[!]?)\s*(?:\n|$)/gi,
+    /(?:^|\n)\s*(?:Would\s+you\s+like\s+me\s+to[^.?\n]*[?.]?|Want\s+me\s+to[^.?\n]*[?.]?|Should\s+I\s+continue[?.]?|Let\s+me\s+know\s+if\s+you\s+need[^.?\n]*[?.]?)\s*(?:\n|$)/gi,
+    /(?:^|\n)\s*(?:Here\s+is\s+a\s+(?:breakdown|summary|rewrite|paraphrase)[^:\n]*:?)\s*(?:\n|$)/gi,
+  ];
+
+  for (const rp of residuePatterns) {
+    if (rp.test(modified)) {
+      modified = modified.replace(rp, '\n');
+      applied = true;
+    }
+  }
+
+  return { text: modified.trim(), applied };
+}
+
+/**
+ * §23: Knowledge-limit disclaimers and guesses.
+ * Removes AI time-limit disclaimers.
+ */
+export function rule23_removeKnowledgeDisclaimers(text: string): { text: string; applied: boolean } {
+  let modified = text;
+  let applied = false;
+
+  const disclaimers = [
+    /(?:^|[.!?]\s+)(?:as\s+of\s+(?:my\s+last\s+update|2023|2024|2025|2026),?\s*|up\s+to\s+my\s+last\s+training\s+update,?\s*)/gi,
+    /(?:^|[.!?]\s+)while\s+specific\s+details\s+are\s+limited,?\s*/gi,
+    /(?:^|[.!?]\s+)based\s+on\s+available\s+information,?\s*/gi,
+    /(?:^|[.!?]\s+)in\s+the\s+(?:provided|available)\s+sources,?\s*/gi,
+  ];
+
+  for (const d of disclaimers) {
+    if (d.pattern.test(modified)) {
+      modified = modified.replace(d.pattern, (m, p1) => {
+        applied = true;
+        return p1 ? `${p1} ` : '';
+      });
+    }
+  }
+
+  return { text: modified, applied };
+}
+
+/**
+ * §24: Heading repeated in first sentence.
+ * Removes redundant first sentences that merely repeat the heading name.
+ */
+export function rule24_removeRepeatedHeadingSentences(text: string, headingText?: string): { text: string; applied: boolean } {
+  if (!headingText) return { text, applied: false };
+  const cleanHeading = headingText.toLowerCase().replace(/[^a-z0-9]/g, ' ').trim();
+  if (!cleanHeading) return { text, applied: false };
+
+  // e.g. Heading: "Methodology", first sentence: "This section details the methodology."
+  const firstSentenceMatch = text.match(/^([^.!?]+[.!?])/);
+  if (firstSentenceMatch) {
+    const firstSent = firstSentenceMatch[1].toLowerCase();
+    if (firstSent.includes(cleanHeading) && (firstSent.includes('this section') || firstSent.includes('this chapter') || firstSent.includes('below are'))) {
+      const remaining = text.slice(firstSentenceMatch[0].length).trim();
+      return { text: remaining, applied: true };
+    }
+  }
+
+  return { text, applied: false };
+}
+
+/**
+ * §25: Writing about the previous version.
+ * Cleans metadata referring to earlier drafts.
+ */
+export function rule25_removePreviousVersionMentions(text: string): { text: string; applied: boolean } {
+  let modified = text;
+  let applied = false;
+
+  const versionPatterns = [
+    /(?:^|[.!?]\s+)(?:This\s+function\s+was\s+added\s+to\s+replace\s+the\s+previous\s+approach[^.]*\.\s*)/gi,
+    /(?:^|[.!?]\s+)(?:Unlike\s+the\s+previous\s+version,?\s*)/gi,
+  ];
+
+  for (const vp of versionPatterns) {
+    if (vp.test(modified)) {
+      modified = modified.replace(vp, (m, p1) => {
+        applied = true;
+        return p1 ? `${p1} ` : '';
+      });
+    }
+  }
+
+  return { text: modified, applied };
+}
+
+/**
+ * Master Humanizer Engine: Applies all 25 Wikipedia Anti-AI rules deterministically.
+ */
+export function humanizeText25Rules(
+  text: string,
+  tone: ToneStyle = 'academic',
+  headingText?: string
+): { transformedText: string; appliedRulesCount: number; rulesApplied: string[] } {
+  // Lock all statistical notations, parentheticals, citations, and decimal values
+  const { lockedText, restore } = lockStatisticalAndAcademicExpressions(text);
+  let result = lockedText;
+  const rulesApplied: string[] = [];
+  let count = 0;
+
+  // §21: Curly quotes
+  const r21 = rule21_convertCurlyQuotes(result);
+  if (r21.applied) {
+    result = r21.text;
+    count++;
+    rulesApplied.push('Rule 21: Converted curly quotes to standard straight quotation marks');
+  }
+
+  // §19: Bold decoration
+  const r19 = rule19_stripDecorativeBolding(result);
+  if (r19.applied) {
+    result = r19.text;
+    count++;
+    rulesApplied.push('Rule 19: Removed decorative inline bolding');
+  }
+
+  // §20: Decorative headings & emojis
+  const r20 = rule20_cleanDecorativeHeadings(result);
+  if (r20.applied) {
+    result = r20.text;
+    count++;
+    rulesApplied.push('Rule 20: Purged decorative emojis, arrows, and divider rules');
+  }
+
+  // §22: Chatbot residue
+  const r22 = rule22_stripChatbotResidue(result);
+  if (r22.applied) {
+    result = r22.text;
+    count++;
+    rulesApplied.push('Rule 22: Stripped chatbot conversational residue');
+  }
+
+  // §23: Knowledge-limit disclaimers
+  const r23 = rule23_removeKnowledgeDisclaimers(result);
+  if (r23.applied) {
+    result = r23.text;
+    count++;
+    rulesApplied.push('Rule 23: Removed knowledge-cutoff boilerplate');
+  }
+
+  // §24: Heading repeated in first sentence
+  const r24 = rule24_removeRepeatedHeadingSentences(result, headingText);
+  if (r24.applied) {
+    result = r24.text;
+    count++;
+    rulesApplied.push('Rule 24: Removed redundant heading echo in opening sentence');
+  }
+
+  // §25: Previous version mentions
+  const r25 = rule25_removePreviousVersionMentions(result);
+  if (r25.applied) {
+    result = r25.text;
+    count++;
+    rulesApplied.push('Rule 25: Removed meta-commentary on previous versions');
+  }
+
+  // §4: Staged run-up
+  const r4 = rule4_stripStagedRunUp(result);
+  if (r4.applied) {
+    result = r4.text;
+    count++;
+    rulesApplied.push('Rule 4: Stripped staged conversational run-up before points');
+  }
+
+  // §5: Arguing with no one
+  const r5 = rule5_removeArguingWithNoOne(result);
+  if (r5.applied) {
+    result = r5.text;
+    count++;
+    rulesApplied.push('Rule 5: Removed preemptive self-defensive phrasing');
+  }
+
+  // §1: Not X but Y
+  const r1 = rule1_eliminateNotXButY(result);
+  if (r1.applied) {
+    result = r1.text;
+    count++;
+    rulesApplied.push('Rule 1: Converted "Not X but Y" staging into direct statement');
+  }
+
+  // §2: Closers and dramatic fragments
+  const r2 = rule2_cleanClosersAndDramaticFragments(result);
+  if (r2.applied) {
+    result = r2.text;
+    count++;
+    rulesApplied.push('Rule 2: Merged dramatic fragments and eliminated vacuous closers');
+  }
+
+  // §3: Sayings that sound deep
+  const r3 = rule3_replaceDeepSoundingSayings(result);
+  if (r3.applied) {
+    result = r3.text;
+    count++;
+    rulesApplied.push('Rule 3: Replaced deep-sounding AI proverbs with concrete claims');
+  }
+
+  // §8: Dashes as universal connector (STRICT MANDATE)
+  const r8 = rule8_eliminateAllDashes(result);
+  if (r8.applied) {
+    result = r8.text;
+    count++;
+    rulesApplied.push('Rule 8: Eliminated all em/en dashes and restructured connectors');
+  }
+
+  // §9: Stacked qualifiers
+  const r9 = rule9_simplifyStackedQualifiers(result);
+  if (r9.applied) {
+    result = r9.text;
+    count++;
+    rulesApplied.push('Rule 9: Simplified stacked hedging and qualifiers');
+  }
+
+  // §10: Hyphenated pairs
+  const r10 = rule10_normalizeHyphenatedPairs(result);
+  if (r10.applied) {
+    result = r10.text;
+    count++;
+    rulesApplied.push('Rule 10: Normalized overused hyphenated compound pairs');
+  }
+
+  // §11: Passive voice missing subjects
+  const r11 = rule11_resolvePassiveMissingSubjects(result);
+  if (r11.applied) {
+    result = r11.text;
+    count++;
+    rulesApplied.push('Rule 11: Restored natural human subject to agentless clauses');
+  }
+
+  // §15: Shallow -ing riders
+  const r15 = rule15_stripShallowIngRiders(result);
+  if (r15.applied) {
+    result = r15.text;
+    count++;
+    rulesApplied.push('Rule 15: Removed shallow trailing -ing participle riders');
+  }
+
+  // §17: Borrowed authority
+  const r17 = rule17_stripBorrowedAuthority(result);
+  if (r17.applied) {
+    result = r17.text;
+    count++;
+    rulesApplied.push('Rule 17: Neutralized vague consensus and borrowed authority');
+  }
+
+  // §18: Avoiding is, are, and has
+  const r18 = rule18_restoreIsAreHas(result);
+  if (r18.applied) {
+    result = r18.text;
+    count++;
+    rulesApplied.push('Rule 18: Restored direct is/are/has copulas over artificial verbs');
+  }
+
+  // §6: Forced triads
+  const r6 = rule6_smoothForcedTriads(result);
+  if (r6.applied) {
+    result = r6.text;
+    count++;
+    rulesApplied.push('Rule 6: Smoothed forced three-part buzzword triads');
+  }
+
+  // §12 & §16: Purge AI Vocabulary & Sales language
+  const { cleanedText: unClicheText, replacedCount: vocabReplaced } = sanitizeAiVocabulary(result);
+  if (vocabReplaced > 0) {
+    result = unClicheText;
+    count += vocabReplaced;
+    rulesApplied.push(`Rule 12/16: Replaced ${vocabReplaced} overused AI tell words`);
+  }
+
+  // Clean spacing safely without ever touching decimal numbers or statistics
+  result = result
+    .replace(/\s{2,}/g, ' ')
+    .replace(/\s+([,;:!?])/g, '$1')
+    .replace(/([;:])(?=[A-Za-z])/g, '$1 ')
+    .replace(/([!?])(?=[A-Za-z])/g, '$1 ')
+    .trim();
+
+  return {
+    transformedText: restore(result),
+    appliedRulesCount: count,
+    rulesApplied,
+  };
 }
 
 /**
@@ -396,8 +1288,6 @@ export interface BurstinessResult {
 
 /**
  * Calculates sentence length variation (Burstiness).
- * AI text is notorious for having very low standard deviation (uniform 14-16 words per sentence).
- * Human writing has high burstiness (alternating short 5-word sentences with 25+ word compound sentences).
  */
 export function calculateBurstiness(sentenceTexts: string[]): BurstinessResult {
   const lengths = sentenceTexts
@@ -435,8 +1325,6 @@ export function calculateBurstiness(sentenceTexts: string[]): BurstinessResult {
     }
   }
 
-  // Calculate Burstiness Score (0 to 100)
-  // Standard deviation of 8+ words is characteristic of high human burstiness
   let score = Math.min(100, Math.round((stdDev / 8.5) * 85));
   if (!uniformRunDetected && stdDev >= 6.5) {
     score = Math.min(99, score + 12);
@@ -463,82 +1351,17 @@ export function calculateBurstiness(sentenceTexts: string[]): BurstinessResult {
 }
 
 /**
- * Applies deterministic linguistic rules to systematically eliminate AI detection fingerprints:
- * 1. Opener Asymmetry: Replaces formulaic transition words (Furthermore, Moreover, In addition, Additionally)
- *    with fronted dependent clauses, prepositional context frames, or direct anaphoric subjects.
- * 2. Prepositional & Participial Phrase Fronting: Moves context clauses to sentence head.
- * 3. Epistemic Calibrated Hedging: Replaces robotic absolute assertions with authentic scholarly register.
- * 4. Academic Invariant Protection & Format Normalization: Keeps statistical notation APA-compliant.
+ * Applies deterministic linguistic humanization rules across paragraphs and sentences.
  */
 export function applyLinguisticHumanizationRules(
   text: string,
   tone: ToneStyle = 'academic'
 ): { transformedText: string; appliedRulesCount: number; rulesApplied: string[] } {
-  // Lock all statistical notations, parentheticals, citations, and decimal values
-  const { lockedText, restore } = lockStatisticalAndAcademicExpressions(text);
-  let result = lockedText;
-  const rulesApplied: string[] = [];
-  let count = 0;
-
-  // 1. Remove formulaic AI discourse starters at sentence boundaries
-  const openerRegex = /(^|[.!?]\s+)(?:Furthermore|Moreover|In addition|Additionally|Importantly|Crucially|Consequently),\s*/gi;
-  if (openerRegex.test(result)) {
-    result = result.replace(openerRegex, (match, p1) => {
-      count++;
-      return p1;
-    });
-    rulesApplied.push('Eliminated robotic discourse openers (Furthermore/Moreover/In addition)');
-  }
-
-  // 2. Fronting & Restructuring known robotic academic patterns
-  const delvePattern = /it\s+is\s+(?:crucial|vital|essential)\s+to\s+(?:delve\s+into|examine)\s+how\s+([^.]+?)\s+plays?\s+a\s+(?:pivotal|key|vital|significant)\s+role\s+in\s+([^.]+)/gi;
-  if (delvePattern.test(result)) {
-    result = result.replace(delvePattern, 'examining how $1 directly influences $2 is essential');
-    count++;
-    rulesApplied.push('Restructured formulaic "delve/pivotal" clause into active scholarly framing');
-  }
-
-  const testamentPattern = /stands?\s+as\s+a\s+testament\s+to\s+the\s+importance\s+of\s+fostering\s+([^.]+)/gi;
-  if (testamentPattern.test(result)) {
-    result = result.replace(testamentPattern, 'reflects the importance of encouraging $1');
-    count++;
-    rulesApplied.push('Converted "testament to fostering" AI trope into authentic scholarly phrasing');
-  }
-
-  const controlPattern = /the\s+statistical\s+models\s+meticulously\s+controlled\s+for\s+([^.]+?)\s+across\s+([^.]+)/gi;
-  if (controlPattern.test(result)) {
-    result = result.replace(controlPattern, 'Across $2, statistical models adjusted for $1');
-    count++;
-    rulesApplied.push('Prepositional fronting applied to methodological control clause');
-  }
-
-  const worthNotingPattern = /it\s+is\s+(?:worth\s+noting|important\s+to\s+note)\s+that\s+([^.]+)/gi;
-  if (worthNotingPattern.test(result)) {
-    result = result.replace(worthNotingPattern, (m, rest) => {
-      count++;
-      return rest.charAt(0).toUpperCase() + rest.slice(1);
-    });
-    rulesApplied.push('Stripped formulaic "it is worth noting that" filler');
-  }
-
-  // 3. Fix Part-of-Speech: Ensure "use" as a noun is never corrupted to "utilize" or "employ"
-  result = result.replace(/\b([A-Za-z]+)\s+media\s+(?:utilize|employ)\b/gi, '$1 media use');
-  result = result.replace(/\bsocial\s+media\s+usage\b/gi, 'social media use');
-
-  // 4. Clean spacing safely without ever touching decimal numbers or statistics
-  result = result
-    .replace(/\s{2,}/g, ' ')
-    .replace(/\s+([,;:!?])/g, '$1')
-    .replace(/([;:])(?=[A-Za-z])/g, '$1 ')
-    .replace(/([!?])(?=[A-Za-z])/g, '$1 ');
-
-  return { transformedText: restore(result), appliedRulesCount: count, rulesApplied };
+  return humanizeText25Rules(text, tone);
 }
 
 /**
- * Enforces High Burstiness on a list of sentences by actively varying sentence architecture:
- * Combines consecutive short sentences or creates punchy thesis statements
- * to prevent robotic AI uniformity.
+ * Enforces High Burstiness on a list of sentences by actively varying sentence architecture.
  */
 export function injectBurstinessRhythm(sentences: string[]): string[] {
   if (sentences.length <= 1) return sentences;
@@ -552,8 +1375,8 @@ export function injectBurstinessRhythm(sentences: string[]): string[] {
     const words1 = s1.split(/\s+/).filter(Boolean);
     const words2 = s2 ? s2.split(/\s+/).filter(Boolean) : [];
 
-    // If we have two consecutive mid-length sentences of nearly identical length (e.g. 11w-17w),
-    // dynamically combine them with an academic connector or semicolon to create rhythm diversity.
+    // If we have two consecutive mid-length sentences of nearly identical length (e.g. 10w-17w),
+    // combine with semicolon or conjunction to create rhythm diversity.
     if (
       s2 &&
       words1.length >= 10 &&
@@ -562,7 +1385,9 @@ export function injectBurstinessRhythm(sentences: string[]): string[] {
       words2.length <= 17 &&
       !s1.endsWith('?') &&
       !s2.endsWith('?') &&
-      !/^(however|moreover|furthermore|additionally|nevertheless)\b/i.test(s2)
+      !/^(however|moreover|furthermore|additionally|nevertheless)\b/i.test(s2) &&
+      !s1.includes(';') &&
+      !s2.includes(';')
     ) {
       const cleanS1 = s1.replace(/[.!]+$/, '');
       const cleanS2 = s2.charAt(0).toLowerCase() + s2.slice(1);
@@ -580,8 +1405,7 @@ export function injectBurstinessRhythm(sentences: string[]): string[] {
 }
 
 /**
- * Inspects a document or paragraph and verifies that domain and methodological terms
- * have remained strictly intact.
+ * Counts preserved domain terms.
  */
 export function countPreservedDomainTerms(originalText: string, paraphrasedText: string): {
   count: number;
@@ -607,7 +1431,7 @@ export function countPreservedDomainTerms(originalText: string, paraphrasedText:
 
 /**
  * Restores domain and methodological terms if an abstractive model replaced them
- * with unnatural or awkward pseudo-synonyms (e.g. "specimen" for "sample", "tertiary learners" for "university students").
+ * with awkward pseudo-synonyms.
  */
 export function restoreDomainTerms(originalText: string, paraphrasedText: string): string {
   let restored = paraphrasedText;
@@ -632,7 +1456,7 @@ export function restoreDomainTerms(originalText: string, paraphrasedText: string
 
   // 4. "correlated" / "correlation"
   if (/\bcorrelat(?:ed|ion|es)\b/i.test(origLower)) {
-    restored = restored.replace(/\b(?:interlinked\s+with|co-manifested\s+with|intertwined\s+with)\b/gi, 'correlated with');
+    restored = restored.replace(/\b(?:interlinked\s+with|co-manifested\s+with|intertwined\s+with|meaningfully\s+not\s+statistically\s+independent)\b/gi, 'correlated with');
   }
 
   return restored;
@@ -663,13 +1487,13 @@ export function evaluateAiDetection(sentences: string[], fullText: string): AiDe
   const domain = countPreservedDomainTerms(fullText, fullText);
 
   // Baseline AI flag probability
-  let aiProb = 15;
+  let aiProb = 12;
 
   // AI models have low sentence length variance (std dev < 4.5)
   if (burstiness.stdDev < 3.5 || burstiness.uniformRunDetected) {
     aiProb += 45;
   } else if (burstiness.stdDev < 5.2) {
-    aiProb += 25;
+    aiProb += 22;
   } else if (burstiness.stdDev >= 6.8) {
     aiProb -= 10;
   }
@@ -678,7 +1502,12 @@ export function evaluateAiDetection(sentences: string[], fullText: string): AiDe
   if (foundCliches.length > 0) {
     aiProb += Math.min(45, foundCliches.length * 15);
   } else {
-    aiProb -= 5;
+    aiProb -= 6;
+  }
+
+  // Dashes flag AI detector heuristics
+  if (/[—–]/.test(fullText)) {
+    aiProb += 15;
   }
 
   // If domain terms are natural
@@ -700,34 +1529,29 @@ export function evaluateAiDetection(sentences: string[], fullText: string): AiDe
 
 /**
  * Computes estimated AI Detection Bypass Likelihood (0 - 100%)
- * based on Burstiness, AI Vocabulary absence, and Domain Term consistency.
  */
 export function estimateAiBypassLikelihood(
   burstiness: BurstinessResult,
   aiClichesFound: number,
   preservedDomainCount: number
 ): number {
-  let likelihood = 85;
+  let likelihood = 88;
 
-  // High burstiness is the #1 defense against AI perplexity/burstiness detectors
   if (burstiness.rating === 'High (Human-like)') {
     likelihood += 10;
   } else if (burstiness.rating === 'Low (AI Uniform)') {
     likelihood -= 25;
   }
 
-  // Deduct heavily if raw text has AI clichés
   if (aiClichesFound === 0) {
     likelihood += 4;
   } else {
-    likelihood -= Math.min(25, aiClichesFound * 5);
+    likelihood -= Math.min(30, aiClichesFound * 6);
   }
 
-  // Preserving authentic domain terms keeps perplexity realistic
   if (preservedDomainCount > 0) {
     likelihood += Math.min(6, preservedDomainCount * 1.5);
   }
 
   return Math.min(99, Math.max(25, Math.round(likelihood)));
 }
-

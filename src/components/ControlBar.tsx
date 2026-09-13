@@ -10,6 +10,7 @@ import {
   Sparkles,
   Settings2,
   Terminal,
+  ShieldCheck,
 } from 'lucide-react';
 import { LocalLlmModal } from './LocalLlmModal';
 
@@ -49,13 +50,13 @@ export const ControlBar: React.FC<ControlBarProps> = ({
                 onClick={() => update('engine', 'ai')}
                 className={`inline-flex items-center px-3 py-1 text-xs font-medium rounded-md transition-all ${
                   config.engine === 'ai'
-                    ? 'bg-purple-600 text-white shadow-xs'
+                    ? 'bg-purple-600 text-white shadow-xs font-semibold'
                     : 'text-slate-300 hover:text-white hover:bg-slate-700/60'
                 }`}
-                title="Neural Abstractive Rewriting + Linguistic Rules powered by Gemini"
+                title="Cloud Hybrid Engine: Neural abstractive restructuring via Gemini paired with deterministic linguistic rules and anti-AI humanization pass"
               >
                 <Sparkles className="w-3 h-3 mr-1 text-purple-200" />
-                Cloud AI
+                Cloud Hybrid (AI + Rules)
               </button>
 
               <div className="inline-flex items-center">
@@ -67,10 +68,10 @@ export const ControlBar: React.FC<ControlBarProps> = ({
                       ? 'bg-amber-500 text-slate-950 font-semibold shadow-xs'
                       : 'text-slate-300 hover:text-white hover:bg-slate-700/60'
                   }`}
-                  title="Local Model + Linguistic Rules (Google Gemma, Llama, Ollama, LM Studio)"
+                  title="Local Hybrid Engine: Private on-device neural restructuring (Gemma, Llama, Ollama) paired with deterministic linguistic rules and anti-AI humanization pass"
                 >
                   <Terminal className="w-3 h-3 mr-1 text-amber-900" />
-                  Local LLM
+                  Local Hybrid (LLM + Rules)
                 </button>
                 <button
                   id="btn-config-local-llm"
@@ -98,6 +99,44 @@ export const ControlBar: React.FC<ControlBarProps> = ({
                 <span>{config.localLlm?.modelName || 'gemma4'}</span>
               </button>
             )}
+          </div>
+
+          {/* Intensity Selector */}
+          <div className="flex items-center space-x-2">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center">
+              <Zap className="w-3.5 h-3.5 mr-1 text-amber-400" />
+              Intensity:
+            </span>
+            <div className="inline-flex rounded-lg bg-slate-800 p-1 border border-slate-700">
+              {(['radical', 'balanced', 'conservative'] as const).map((lvl) => {
+                const isActive = (config.paraphraseIntensity || 'radical') === lvl;
+                return (
+                  <button
+                    key={lvl}
+                    id={`btn-intensity-${lvl}`}
+                    onClick={() => update('paraphraseIntensity', lvl)}
+                    className={`px-2.5 py-1 text-xs font-medium rounded-md capitalize transition-all ${
+                      isActive
+                        ? lvl === 'radical'
+                          ? 'bg-rose-600 text-white shadow-xs font-semibold'
+                          : lvl === 'balanced'
+                          ? 'bg-indigo-600 text-white shadow-xs'
+                          : 'bg-slate-700 text-white shadow-xs'
+                        : 'text-slate-300 hover:text-white hover:bg-slate-700/60'
+                    }`}
+                    title={
+                      lvl === 'radical'
+                        ? 'Radical structural reordering, multi-word phrasal transformations, and high lexical variation'
+                        : lvl === 'balanced'
+                        ? 'Balanced lexical substitutions and moderate clause transformations'
+                        : 'Conservative substitutions preserving close syntactic structure'
+                    }
+                  >
+                    {lvl}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {/* Tone Selector */}

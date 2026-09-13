@@ -247,6 +247,7 @@ export const MetricsBar: React.FC<MetricsBarProps> = ({ metrics, targetTone }) =
               </div>
               <div className="text-lg font-bold text-slate-900">
                 {metrics.techniqueStats.synonymsReplaced +
+                  (metrics.techniqueStats.phrasesShifted || 0) +
                   metrics.techniqueStats.wordClassShifts +
                   metrics.techniqueStats.voiceConversions +
                   metrics.techniqueStats.clausesReordered +
@@ -261,6 +262,18 @@ export const MetricsBar: React.FC<MetricsBarProps> = ({ metrics, targetTone }) =
         {/* Real-time Technique Breakdown Chips */}
         <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-100 text-xs">
           <span className="text-slate-500 font-medium mr-1 text-[11px] uppercase tracking-wider">Linguistic Layers:</span>
+
+          {metrics.usedEngine === 'local_llm' ? (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-amber-50 text-amber-900 border border-amber-300 text-[11px] font-semibold">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5"></span>
+              Local Hybrid (LLM + Rules)
+            </span>
+          ) : (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-purple-50 text-purple-900 border border-purple-300 text-[11px] font-semibold">
+              <span className="w-1.5 h-1.5 rounded-full bg-purple-500 mr-1.5"></span>
+              Cloud Hybrid (AI + Rules)
+            </span>
+          )}
 
           <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 text-[11px]">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5"></span>
@@ -286,6 +299,13 @@ export const MetricsBar: React.FC<MetricsBarProps> = ({ metrics, targetTone }) =
             <GitFork className="w-3 h-3 mr-1 text-indigo-600" />
             Structure Shifts: <strong className="ml-1">{metrics.techniqueStats.structureShifts}</strong>
           </span>
+
+          {Boolean(metrics.techniqueStats.phrasesShifted) && (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-rose-50 text-rose-800 border border-rose-200 text-[11px]">
+              <Layers className="w-3 h-3 mr-1 text-rose-600" />
+              Phrasal Transforms: <strong className="ml-1">{metrics.techniqueStats.phrasesShifted}</strong>
+            </span>
+          )}
         </div>
       </div>
     </div>

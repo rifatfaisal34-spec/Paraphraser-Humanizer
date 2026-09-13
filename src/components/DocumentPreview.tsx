@@ -212,14 +212,20 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
                         <span>Paraphrasing this paragraph...</span>
                       </div>
                     )}
-                    <p className="text-slate-900 text-[15px] leading-relaxed font-times">
-                      {p.sentences.map((sentence) => (
-                        <span key={sentence.id} className="mr-1">
-                          {renderInteractiveSentence(sentence, (change) =>
-                            setActiveWordChange({ change, sentence })
-                          )}
-                        </span>
-                      ))}
+                    <p className="text-slate-900 text-[15px] leading-relaxed font-times select-text">
+                      {p.sentences.map((sentence, sIdx) => {
+                        const needsTrailingSpace =
+                          sIdx < p.sentences.length - 1 &&
+                          !sentence.paraphrasedText.endsWith(' ');
+                        return (
+                          <React.Fragment key={sentence.id}>
+                            {renderInteractiveSentence(sentence, (change) =>
+                              setActiveWordChange({ change, sentence })
+                            )}
+                            {needsTrailingSpace && ' '}
+                          </React.Fragment>
+                        );
+                      })}
                     </p>
                   </div>
                 );
@@ -309,23 +315,30 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
               return (
                 <div key={p.id || pIdx} className="p-3 bg-slate-50/60 rounded-lg border border-slate-100 space-y-2">
                   <div className="text-slate-400 text-xs line-through">{p.originalText}</div>
-                  <div className="text-slate-900 font-medium">
-                    {p.sentences.map((sent) => (
-                      <span
-                        key={sent.id}
-                        className={`inline mr-1 px-1 py-0.5 rounded transition-colors ${
-                          sent.techniques.includes('voice_active') || sent.techniques.includes('voice_passive')
-                            ? 'bg-blue-50 border border-blue-200'
-                            : sent.techniques.includes('word_class')
-                            ? 'bg-purple-50 border border-purple-200'
-                            : sent.techniques.length > 0
-                            ? 'bg-emerald-50 border border-emerald-200'
-                            : ''
-                        }`}
-                      >
-                        {sent.paraphrasedText}
-                      </span>
-                    ))}
+                  <div className="text-slate-900 font-medium select-text">
+                    {p.sentences.map((sent, sIdx) => {
+                      const needsTrailingSpace =
+                        sIdx < p.sentences.length - 1 &&
+                        !sent.paraphrasedText.endsWith(' ');
+                      return (
+                        <React.Fragment key={sent.id}>
+                          <span
+                            className={`inline px-1 py-0.5 rounded transition-colors ${
+                              sent.techniques.includes('voice_active') || sent.techniques.includes('voice_passive')
+                                ? 'bg-blue-50 border border-blue-200'
+                                : sent.techniques.includes('word_class')
+                                ? 'bg-purple-50 border border-purple-200'
+                                : sent.techniques.length > 0
+                                ? 'bg-emerald-50 border border-emerald-200'
+                                : ''
+                            }`}
+                          >
+                            {sent.paraphrasedText}
+                          </span>
+                          {needsTrailingSpace && ' '}
+                        </React.Fragment>
+                      );
+                    })}
                   </div>
                 </div>
               );
@@ -371,14 +384,15 @@ function renderInteractiveSentence(
   onWordClick: (change: WordChange) => void
 ) {
   if (sentence.wordChanges.length === 0) {
-    return <span>{sentence.paraphrasedText}</span>;
+    return <>{sentence.paraphrasedText}</>;
   }
 
   const words = sentence.paraphrasedText.split(/(\s+|[.,!?;:()"'])/);
 
   return (
-    <span>
+    <>
       {words.map((w, idx) => {
+        if (!w) return null;
         const cleanW = w.toLowerCase().replace(/[^a-z]/g, '');
         const matchedChange = sentence.wordChanges.find(
           (wc) => wc.replaced.toLowerCase() === cleanW || wc.replaced.toLowerCase().includes(cleanW)
@@ -397,8 +411,8 @@ function renderInteractiveSentence(
           );
         }
 
-        return <span key={`${sentence.id}-t-${idx}`}>{w}</span>;
+        return <React.Fragment key={`${sentence.id}-t-${idx}`}>{w}</React.Fragment>;
       })}
-    </span>
+    </>
   );
 }

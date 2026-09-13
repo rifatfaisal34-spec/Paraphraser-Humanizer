@@ -18,6 +18,7 @@ export type TechniqueUsed =
   | 'structural_complexity'
   | 'fronting_topicalization'
   | 'human_discourse_marker'
+  | 'phrase_shift'
   | 'litotes';
 
 export interface WordAlternative {
@@ -75,6 +76,7 @@ export interface TechniqueStats {
   sentencesSplitOrCombined: number;
   polarityToggles: number;
   structureShifts: number;
+  phrasesShifted?: number;
 }
 
 export interface DocumentMetrics {
@@ -123,6 +125,7 @@ export interface LocalLlmConfig {
 
 export interface ParaphraseConfig {
   engine: 'ai' | 'local_llm' | 'rule_based';
+  paraphraseIntensity?: 'radical' | 'balanced' | 'conservative';
   tone: ToneStyle;
   structure: SentenceStructure;
   voice?: VoicePreference;
@@ -140,18 +143,19 @@ export interface ParaphraseConfig {
 
 export const DEFAULT_CONFIG: ParaphraseConfig = {
   engine: 'ai',
+  paraphraseIntensity: 'radical',
   tone: 'academic',
   structure: 'preserve',
   voice: 'auto',
   polarity: 'preserve',
-  splitLongSentences: false,
+  splitLongSentences: true,
   combineShortSentences: true,
-  reorderClauses: false,
+  reorderClauses: true,
   changeWordClass: true,
   preserveTechnicalTerms: true,
   enforceBurstiness: true,
   stripAiVocabulary: true,
-  synonymAggressiveness: 'balanced',
+  synonymAggressiveness: 'dynamic',
   localLlm: {
     endpoint: 'http://localhost:11434',
     provider: 'ollama',

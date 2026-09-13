@@ -63,7 +63,7 @@ export function reorderClauses(sentence: string): TransformResult {
   }
 
   // Pattern A: Subordinating conjunction at start: "[SubConj] [ClauseA], [ClauseB]"
-  for (const conj of ['Because', 'Although', 'Even though', 'While', 'Whereas']) {
+  for (const conj of ['Because', 'Although', 'Even though', 'While', 'Whereas', 'Since', 'Given that', 'Inasmuch as', 'If']) {
     const startRegex = new RegExp(`^${conj}\\s+([^,]+),\\s*(.+)$`, 'i');
     const match = clean.match(startRegex);
     if (match) {
@@ -96,7 +96,7 @@ export function reorderClauses(sentence: string): TransformResult {
   }
 
   // Pattern B: Subordinating conjunction in middle: "[ClauseB] [conj] [ClauseA]"
-  for (const conj of ['because', 'although', 'even though', 'while', 'whereas']) {
+  for (const conj of ['because', 'although', 'even though', 'while', 'whereas', 'since', 'given that', 'if']) {
     const middleRegex = new RegExp(`^(.+?)\\s*,?\\s+\\b${conj}\\b\\s+(.+)$`, 'i');
     const midMatch = clean.match(middleRegex);
     if (midMatch) {
@@ -143,6 +143,35 @@ export function reorderClauses(sentence: string): TransformResult {
           };
         }
       }
+    }
+  }
+
+  // Pattern C: Prepositional Frame Inversion (e.g. "In this investigation, X did Y." <-> "X did Y in this investigation.")
+  const prepFrontRegex = /^(In this [^,]+|Across the [^,]+|Throughout this [^,]+|During the [^,]+|Within this [^,]+),\s*(.+)$/i;
+  const prepMatch = clean.match(prepFrontRegex);
+  if (prepMatch) {
+    const prepPhrase = prepMatch[1].trim();
+    const mainBody = prepMatch[2].trim();
+    if (mainBody.split(/\s+/).length >= 5 && !mainBody.includes(':')) {
+      const newSentence = `${capitalize(mainBody)} ${uncapitalize(prepPhrase)}${endingPunct}`;
+      const sanitized = sanitizePunctuationSpacing(newSentence);
+      return {
+        text: sanitized,
+        modified: true,
+        ruleExplanation: `Shifted topical prepositional frame "${prepPhrase}" to the end of the sentence to vary entry cadence.`,
+        wordChanges: [
+          {
+            id: getNextUniqueId('reorder'),
+            original: clean,
+            replaced: sanitized,
+            alternatives: [sentence],
+            technique: 'clause_reorder',
+            startIndex: 0,
+            endIndex: sanitized.length,
+            notes: `Topical prepositional inversion`,
+          },
+        ],
+      };
     }
   }
 
