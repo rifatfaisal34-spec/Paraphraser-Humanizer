@@ -16,6 +16,7 @@ import {
   CASUAL_CONNECTORS,
 } from './lexicon';
 import { SentenceStructure, ToneStyle, WordChange } from '../types';
+import { sanitizePunctuationSpacing } from './sanitizer';
 
 function capitalize(str: string): string {
   if (!str) return '';

@@ -2,7 +2,7 @@ export type ToneStyle = 'professional' | 'casual' | 'academic';
 
 export type SentenceStructure = 'preserve' | 'simple' | 'compound' | 'complex';
 
-export type VoicePreference = 'auto' | 'active' | 'passive';
+export type VoicePreference = 'auto' | 'active' | 'passive' | 'keep';
 
 export type PolarityMode = 'preserve' | 'affirmative' | 'negative';
 

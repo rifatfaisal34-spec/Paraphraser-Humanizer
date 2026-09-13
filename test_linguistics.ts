@@ -1,6 +1,6 @@
 import { paraphraseSentence } from './src/nlp/paraphraserEngine';
 import { sanitizePunctuationSpacing } from './src/nlp/sanitizer';
-import { ParaphraseConfig } from './src/types';
+import { ParaphraseConfig, DEFAULT_CONFIG } from './src/types';
 
 console.log('--- Testing Linguistic Rules & Invariant Vocabulary ---');
 
@@ -36,15 +36,13 @@ const testCases = [
 ];
 
 const config: ParaphraseConfig = {
+  ...DEFAULT_CONFIG,
   tone: 'academic',
-  synonymIntensity: 'medium',
   engine: 'rule_based',
   reorderClauses: true,
   changeWordClass: true,
   voice: 'keep',
   preserveTechnicalTerms: true,
-  antiAiMode: true,
-  useLocalLlm: false,
 };
 
 let allPassed = true;
