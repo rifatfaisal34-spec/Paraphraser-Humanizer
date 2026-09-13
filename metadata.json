@@ -1,0 +1,6 @@
+{
+  "name": "Linguistics DOCX Paraphraser",
+  "description": "Abstractive sequence-to-sequence and rule-based linguistic paraphraser for DOCX documents with scientific entity protection, POS tagging, tone adjustment, and 100% layout preservation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
